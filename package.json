@@ -1,7 +1,7 @@
 {
   "name": "novacine",
   "productName": "NovaCine",
-  "version": "5.4.1",
+  "version": "5.4.4",
   "description": "Streaming sin anuncios — películas, series, anime, torrents",
   "main": "electron-main.js",
   "author": "magamod300",

@@ -354,12 +354,15 @@ main { max-width: 1060px; margin: 0 auto; padding: 24px 18px 60px; }
    TRACKER LIST — WebSocket trackers que WebTorrent
    puede usar desde el browser (no UDP)
 ══════════════════════════════════════════════ */
-const const TRACKERS = [
+/* v5.4.1: FIX — era "const const TRACKERS" (SyntaxError que rompía TODO el script).
+   Sin este fix, ni siquiera initClient() llegaba a correr → cero torrents reproducían. */
+const TRACKERS = [
   /* v5.4.0: lista limpia 2025 — solo trackers WSS verificados activos.
      Fuera: btorrent.xyz (intermitente), fastcast.nz, files.fm:7073, spacetradersapi (heroku free murió). */
   'wss://tracker.openwebtorrent.com',     /* el más fiable */
   'wss://tracker.webtorrent.dev',         /* canónico de WebTorrent */
   'wss://tracker.btorrent.xyz',           /* aún en pie a veces */
+  'wss://tracker.files.fm:7073/announce', /* backup adicional 2025 */
 ];
 
 /* ══════════════════════════════════════════════
@@ -563,10 +566,12 @@ function startStats(torrent, file) {
 
   statsTimer = setInterval(() => {
     if (!torrent) return;
-    $('sDown').textContent   = fmtSpeed(torrent.downloadSpeed);
-    $('sUp').textContent = fmtSpeed(torrent.uploadSpeed);
-    /* v5.3.9: actualizar color del badge sUp */
-    const _u = torrent.uploadSpeed;
+    /* v5.4.2: defensa para getter/función en speeds */
+    const _dl = typeof torrent.downloadSpeed === 'function' ? torrent.downloadSpeed() : (torrent.downloadSpeed || 0);
+    const _up = typeof torrent.uploadSpeed === 'function' ? torrent.uploadSpeed() : (torrent.uploadSpeed || 0);
+    $('sDown').textContent   = fmtSpeed(_dl);
+    $('sUp').textContent = fmtSpeed(_up);
+    const _u = _up;
     $('sUp').className = 'stat-val ' + (_u > 100e3 ? 'blu' : _u > 0 ? 'gold' : 'dim');
     $('sPeers').textContent  = torrent.numPeers;
     $('sProg').textContent   = (torrent.progress * 100).toFixed(1) + '%';
@@ -580,17 +585,24 @@ function startStats(torrent, file) {
     }
 
     // color coding
-    const down = torrent.downloadSpeed;
+    const down = _dl;
     $('sDown').className = 'stat-val ' + (down > 500e3 ? 'grn' : down > 0 ? 'gold' : '');
     $('sPeers').className = 'stat-val ' + (torrent.numPeers >= 3 ? 'grn' : torrent.numPeers > 0 ? 'gold' : 'red');
 
     // peer chips
+    /* v5.4.2: FIX — wire.downloadSpeed es una función, no número */
     const pl = $('peerList');
     pl.innerHTML = '';
     (torrent.wires || []).slice(0, 20).forEach(w => {
       const chip = document.createElement('div');
       chip.className = 'peer-chip' + (!w.peerChoking ? ' seeder' : '');
-      chip.textContent = (w.remoteAddress || 'WebRTC') + (w.downloadSpeed ? ' ' + fmtSpeed(w.downloadSpeed) : '');
+      let speed = 0;
+      try { speed = typeof w.downloadSpeed === 'function' ? w.downloadSpeed() : (w.downloadSpeed || 0); } catch {}
+      let addr = w.remoteAddress;
+      if (!addr || addr === '0.0.0.0' || addr === '::') {
+        addr = w.peerId ? 'peer ' + String(w.peerId).slice(0,6) : 'WebRTC';
+      }
+      chip.textContent = addr + (speed > 0 ? ' · ' + fmtSpeed(speed) : '');
       pl.appendChild(chip);
     });
 
@@ -655,17 +667,60 @@ function playFile(torrent, file) {
   $('vidLoading').classList.remove('hidden');
   $('vidMsg').textContent = 'Aplicando priorización inteligente…';
 
+  /* v5.4.2: timer de progreso vivo */
+  clearInterval(window._loadMsgTimer);
+  let _loadStartTime = Date.now();
+  let _hintShown = false;
+  window._loadMsgTimer = setInterval(() => {
+    if ($('vidLoading').classList.contains('hidden')) {
+      clearInterval(window._loadMsgTimer); return;
+    }
+    const pct = (file.progress * 100).toFixed(1);
+    const peers = torrent.numPeers;
+    let speed = 0;
+    try { speed = typeof torrent.downloadSpeed === 'function' ? torrent.downloadSpeed() : (torrent.downloadSpeed || 0); } catch {}
+    if (peers === 0) {
+      $('vidMsg').textContent = '⚡ Buscando peers… (0 conectados)';
+    } else if (pct < 0.5) {
+      $('vidMsg').textContent = `📡 Conectado a ${peers} peer${peers>1?'s':''} · ${fmtSpeed(speed)}`;
+    } else {
+      $('vidMsg').textContent = `⏳ Buffereando — ${pct}% · ${peers} peers · ${fmtSpeed(speed)}`;
+    }
+    const elapsed = (Date.now() - _loadStartTime) / 1000;
+    if (!_hintShown && elapsed > 20 && file.progress > 0.05) {
+      _hintShown = true;
+      toast('Este archivo no se puede stremear directamente. Esperando a tener suficiente…', '', 8000);
+    }
+    if (file.progress >= 0.95 && !window._blobForced) {
+      window._blobForced = true;
+      dbgLog('⏳ 95%+ descargado pero aún no reproduce — forzando blob fallback');
+      loadViaBlob(file);
+    }
+  }, 1000);
+
   // ★ ESTRATEGIA ÓPTIMA ★
   applySmartPriority(torrent, file);
 
   // Renderizar al <video> — WebTorrent maneja MediaSource internamente
   // y reprioritiza piezas dinámicamente según el currentTime del video
   const vid = $('vid');
+  /* v5.4.1: limpiar handlers previos antes de re-asignar */
+  vid.oncanplay = null;
+  vid.onerror   = null;
+  let _blobFallbackUsed = false;
   vid.oncanplay = () => {
     $('vidLoading').classList.add('hidden');
+    clearInterval(window._loadMsgTimer);
     toast(`▶ ${file.name.split('/').pop()}`, 'ok');
   };
   vid.onerror = () => {
+    /* v5.4.1: solo caer a Blob UNA vez y solo en error inicial */
+    if (_blobFallbackUsed) return;
+    if (vid.currentTime > 0.5) {
+      dbgLog(`⚠ Error de video durante reproducción (currentTime=${vid.currentTime.toFixed(1)}s) — ignorado`);
+      return;
+    }
+    _blobFallbackUsed = true;
     dbgLog(`⚠ Error de codec — intentando Blob URL fallback`);
     loadViaBlob(file);
   };
@@ -746,7 +801,6 @@ function loadSubFromFile(file) {
 
 function attachSubtitle(url, label) {
   const vid = $('vid');
-  // Remover pistas anteriores
   Array.from(vid.querySelectorAll('track')).forEach(t => t.remove());
   const track = document.createElement('track');
   track.kind    = 'subtitles';
@@ -755,7 +809,15 @@ function attachSubtitle(url, label) {
   track.label   = label;
   track.default = true;
   vid.appendChild(track);
-  vid.textTracks[0] && (vid.textTracks[0].mode = 'showing');
+  /* v5.4.1: esperar a que textTracks se pueble antes de mostrar */
+  const tryShow = () => {
+    if (vid.textTracks.length > 0) {
+      vid.textTracks[vid.textTracks.length - 1].mode = 'showing';
+    } else {
+      setTimeout(tryShow, 50);
+    }
+  };
+  tryShow();
 }
 
 /* ── SRT → WebVTT converter ── */
@@ -1007,8 +1069,14 @@ document.addEventListener('drop', e => {
    CONTROLES
 ══════════════════════════════════════════════ */
 function newTorrent() {
-  /* v5.3.9: limpiar handler oncanplay del video anterior */
-  const _v = $('vid'); if (_v) _v.oncanplay = null;
+  const _v = $('vid');
+  if (_v) {
+    _v.oncanplay = null;
+    _v.onerror   = null;
+    _v.removeEventListener('seeking', onSeek);
+  }
+  clearInterval(window._loadMsgTimer);
+  window._blobForced = false;
   if (activeTorrent) {
     try { client.remove(activeTorrent.infoHash); } catch {}
     activeTorrent = null; activeFile = null;

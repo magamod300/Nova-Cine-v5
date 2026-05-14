@@ -4,6 +4,15 @@ const path = require('path');
 const http = require('http');
 const os = require('os');
 
+/* v5.4.2: capturar uncaughtException — el stream del torrent puede tirar errores async
+   que crashean el main process. Sin esto sale el popup "JavaScript error occurred in main process". */
+process.on('uncaughtException', (err) => {
+  console.warn('[main] uncaughtException:', err?.message || err);
+});
+process.on('unhandledRejection', (err) => {
+  console.warn('[main] unhandledRejection:', err?.message || err);
+});
+
 let WebTorrent;
 try { WebTorrent = require('webtorrent'); } catch(e){ console.warn('[NovaCine] WebTorrent no disponible:', e.message); }
 
@@ -235,7 +244,7 @@ ipcMain.handle('search-torrents', async (_e, { imdbId, title, type, season, epis
 /* v5.3.1: auto-update desde GitHub Releases */
 ipcMain.handle('check-update', async () => {
   try {
-    const repo = 'magamod300/Nova-Cine-v5';
+    const repo = 'magamod300/Nova-Cine';
     const data = await fetchJSON(`https://api.github.com/repos/${repo}/releases/latest`);
     if (!data || !data.tag_name) return { hasUpdate: false };
     const current = require('./package.json').version;
@@ -285,24 +294,35 @@ ipcMain.handle('stream-torrent', (_e, magnet)=>{
       const srv = http.createServer((req,res)=>{
         const total = vFile.length;
         const range = req.headers.range;
+        /* v5.4.2: helper para pipe seguro — destroy on client abort + swallow errors */
+        const safePipe = (rs) => {
+          rs.on('error', () => { try{rs.destroy();}catch{} });
+          res.on('close', () => { try{rs.destroy();}catch{} });
+          res.on('error', () => { try{rs.destroy();}catch{} });
+          try { rs.pipe(res); } catch{}
+        };
         if (range){
           const [s,e] = range.replace(/bytes=/,'').split('-');
           const start = parseInt(s,10);
           const end = e ? parseInt(e,10) : Math.min(start+5*1024*1024, total-1);
-          res.writeHead(206, {
-            'Content-Range':`bytes ${start}-${end}/${total}`,
-            'Accept-Ranges':'bytes',
-            'Content-Length': end-start+1,
-            'Content-Type': contentType,
-            'Access-Control-Allow-Origin':'*',
-          });
-          vFile.createReadStream({ start, end }).pipe(res).on('error',()=>{});
+          try {
+            res.writeHead(206, {
+              'Content-Range':`bytes ${start}-${end}/${total}`,
+              'Accept-Ranges':'bytes',
+              'Content-Length': end-start+1,
+              'Content-Type': contentType,
+              'Access-Control-Allow-Origin':'*',
+            });
+            safePipe(vFile.createReadStream({ start, end }));
+          } catch{}
         } else {
-          res.writeHead(200, {
-            'Content-Length':total,'Content-Type': contentType,'Accept-Ranges':'bytes',
-            'Access-Control-Allow-Origin':'*',
-          });
-          vFile.createReadStream().pipe(res).on('error',()=>{});
+          try {
+            res.writeHead(200, {
+              'Content-Length':total,'Content-Type': contentType,'Accept-Ranges':'bytes',
+              'Access-Control-Allow-Origin':'*',
+            });
+            safePipe(vFile.createReadStream());
+          } catch{}
         }
       });
       srv.listen(0,'127.0.0.1', ()=>{
