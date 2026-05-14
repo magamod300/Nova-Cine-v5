@@ -24,6 +24,12 @@
 <!-- v5: CinePro backend + hls.js para reproducción nativa .m3u8 -->
 <link rel="preconnect" href="https://nova-cine.onrender.com" crossorigin>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<!-- v5.4.5: Fallback de fonts — DM Sans como respaldo si Netflix Sans no carga -->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&display=swap">
+<style>
+  :root { --font-body: 'Netflix Sans', 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+</style>
 <style>
 html{scroll-behavior:smooth}
 body{min-height:100vh;overflow-x:hidden;
@@ -560,6 +566,65 @@ body.cinema #exitCinema{display:block}
 <script>
 /* ── v4.9 Caché TMDB en sessionStorage (1h) ── */
 const TMDB_CACHE = new Map();
+
+/* v5.4.5: YTS mirrors fallback (VPN/DNS blocking) */
+const YTS_MIRRORS = [
+  'https://yts.mx', 'https://yts.rs', 'https://yts.lt',
+  'https://yts.am', 'https://yts.gd', 'https://yts-official.mx',
+];
+async function fetchYTS(pathQuery){
+  let lastErr;
+  for (const base of YTS_MIRRORS){
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(()=>ctrl.abort(), 8000);
+      const r = await fetch(base + pathQuery, { signal: ctrl.signal, cache:'no-store' });
+      clearTimeout(to);
+      if (r.ok){
+        const data = await r.json();
+        if (data && data.status === 'ok') return data;
+      }
+    } catch(e){ lastErr = e; }
+  }
+  /* v5.4.6: CORS proxies para bypass DNS del ISP */
+  for (const base of YTS_MIRRORS){
+    const fullUrl = base + pathQuery;
+    for (const proxy of [
+      u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+      u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    ]){
+      try {
+        const ctrl = new AbortController();
+        const to = setTimeout(()=>ctrl.abort(), 10000);
+        const r = await fetch(proxy(fullUrl), { signal: ctrl.signal });
+        clearTimeout(to);
+        if (r.ok){
+          const data = await r.json();
+          if (data && data.status === 'ok') return data;
+        }
+      } catch(e){ lastErr = e; }
+    }
+  }
+  if (window.nativeAPI && window.nativeAPI.searchTorrents){
+    try {
+      const imdbMatch = pathQuery.match(/imdb_id=([^&]+)/);
+      const queryMatch = pathQuery.match(/query_term=([^&]+)/);
+      const res = await window.nativeAPI.searchTorrents({
+        imdbId: imdbMatch ? imdbMatch[1] : null,
+        title: queryMatch ? decodeURIComponent(queryMatch[1]) : null,
+        type: 'movie',
+      });
+      if (res && res.length){
+        return { status:'ok', data:{ movie:{ torrents: res.filter(x=>x.source==='YTS').map(x=>({
+          quality: x.quality, size: x.size, seeds: x.seeds, peers: x.peers,
+          hash: (x.magnet.match(/btih:([a-f0-9]+)/i)||[])[1],
+        })) }}};
+      }
+    } catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('Todos los mirrors de YTS fallaron');
+}
+
 async function tmdbFetch(url, cacheMs=3600000){
   const key = 'tmdb_'+url;
   /* En memoria primero */
@@ -645,12 +710,10 @@ async function loadTorrentSources(){
         setTimeout(()=>{ if (trDiv && trDiv.parentNode) trDiv.style.display='none'; }, 4000);
         return;
       }
-      const url = S.imdbId
-        ? `https://yts.mx/api/v2/movie_details.json?imdb_id=${S.imdbId}&with_cast=false`
-        : `https://yts.mx/api/v2/list_movies.json?query_term=${encodeURIComponent(S.title)}&limit=5`;
-      const r = await fetch(url);
-      if (!r.ok) throw new Error('HTTP '+r.status);
-      const data = await r.json();
+      const path = S.imdbId
+        ? `/api/v2/movie_details.json?imdb_id=${S.imdbId}&with_cast=false`
+        : `/api/v2/list_movies.json?query_term=${encodeURIComponent(S.title)}&limit=5`;
+      const data = await fetchYTS(path);
       const tr = [
         'wss://tracker.openwebtorrent.com',
         'wss://tracker.webtorrent.dev',
@@ -2218,11 +2281,10 @@ async function showLatinMagnetsPanel(){
   let results = [];
   /* YTS — siempre LAT si está en su catálogo */
   if (!S.isSeries) try {
-    const url = S.imdbId
-      ? `https://yts.mx/api/v2/movie_details.json?imdb_id=${S.imdbId}`
-      : `https://yts.mx/api/v2/list_movies.json?query_term=${encodeURIComponent(S.title)}&limit=5`;
-    const r = await fetch(url);
-    const data = await r.json();
+    const path = S.imdbId
+      ? `/api/v2/movie_details.json?imdb_id=${S.imdbId}`
+      : `/api/v2/list_movies.json?query_term=${encodeURIComponent(S.title)}&limit=5`;
+    const data = await fetchYTS(path);
     const torrents = data?.data?.movie?.torrents
       ? data.data.movie.torrents.map(t=>({...t, title: data.data.movie.title_long}))
       : (data?.data?.movies||[]).flatMap(m=>(m.torrents||[]).map(t=>({...t, title: m.title_long})));

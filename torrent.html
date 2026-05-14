@@ -357,12 +357,25 @@ main { max-width: 1060px; margin: 0 auto; padding: 24px 18px 60px; }
 /* v5.4.1: FIX — era "const const TRACKERS" (SyntaxError que rompía TODO el script).
    Sin este fix, ni siquiera initClient() llegaba a correr → cero torrents reproducían. */
 const TRACKERS = [
-  /* v5.4.0: lista limpia 2025 — solo trackers WSS verificados activos.
-     Fuera: btorrent.xyz (intermitente), fastcast.nz, files.fm:7073, spacetradersapi (heroku free murió). */
-  'wss://tracker.openwebtorrent.com',     /* el más fiable */
-  'wss://tracker.webtorrent.dev',         /* canónico de WebTorrent */
-  'wss://tracker.btorrent.xyz',           /* aún en pie a veces */
-  'wss://tracker.files.fm:7073/announce', /* backup adicional 2025 */
+  'wss://tracker.openwebtorrent.com',
+  'wss://tracker.webtorrent.dev',
+  'wss://tracker.btorrent.xyz',
+  'wss://tracker.files.fm:7073/announce',
+  'wss://tracker.novage.com.ua',
+  'wss://tracker.sloppyta.co:443/announce',
+  'wss://peertube.cpy.re:443/tracker/socket',
+  'wss://qot.abiir.top:443/announce',
+];
+
+const STUN_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:openrelay.metered.ca:80' },
 ];
 
 /* ══════════════════════════════════════════════
@@ -713,6 +726,18 @@ function playFile(torrent, file) {
     clearInterval(window._loadMsgTimer);
     toast(`▶ ${file.name.split('/').pop()}`, 'ok');
   };
+  /* v5.4.3: ocultar overlay también en loadeddata (mucho antes que canplay) */
+  vid.onloadeddata = () => {
+    if (vid.readyState >= 2) {
+      $('vidLoading').classList.add('hidden');
+      clearInterval(window._loadMsgTimer);
+      vid.play().catch(()=>{});
+      toast(`▶ ${file.name.split('/').pop()}`, 'ok');
+    }
+  };
+  vid.onloadedmetadata = () => {
+    dbgLog(`📼 Metadata del video lista — duración: ${vid.duration?.toFixed(1)}s`);
+  };
   vid.onerror = () => {
     /* v5.4.1: solo caer a Blob UNA vez y solo en error inicial */
     if (_blobFallbackUsed) return;
@@ -873,10 +898,18 @@ function toggleDbg() {
 function initClient() {
   if (client) { try { client.destroy(); } catch {} }
   client = new WebTorrent({
-    tracker: { rtcConfig: { iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:global.stun.twilio.com:3478' },
-    ]}}
+    maxConns: 100,
+    dht: false,
+    utPex: true,
+    tracker: {
+      rtcConfig: {
+        iceServers: STUN_SERVERS,
+        iceTransportPolicy: 'all',
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require',
+        iceCandidatePoolSize: 10,
+      },
+    },
   });
   client.on('error', e => {
     toast('Error WebTorrent: ' + e.message, 'err');
@@ -917,8 +950,9 @@ function addTorrent(input) {
 
   const opts = {
     announce: TRACKERS,
-    strategy: 'sequential',   // descarga en orden = mejor streaming
-    storeCacheSlots: 50,       // más cache en memoria = menos re-requests
+    strategy: 'sequential',
+    storeCacheSlots: 200,
+    maxWebConns: 8,
   };
 
   /* v5.3.7: try/catch para capturar errores de parse-torrent y reportar al usuario */
@@ -1073,6 +1107,8 @@ function newTorrent() {
   if (_v) {
     _v.oncanplay = null;
     _v.onerror   = null;
+    _v.onloadeddata = null;
+    _v.onloadedmetadata = null;
     _v.removeEventListener('seeking', onSeek);
   }
   clearInterval(window._loadMsgTimer);

@@ -96,9 +96,35 @@ app.on('window-all-closed', ()=>{
 
 /* ═══ TORRENT STREAMING (WebTorrent + HTTP Range local) ═══ */
 let wtClient = null, activeTorrent = null, streamServer = null;
+
+/* v5.4.5: trackers nativos — UDP/HTTP/WSS, máximo descubrimiento de peers */
+const NATIVE_TRACKERS = [
+  'udp://tracker.opentrackr.org:1337/announce',
+  'udp://open.stealth.si:80/announce',
+  'udp://tracker.torrent.eu.org:451/announce',
+  'udp://exodus.desync.com:6969/announce',
+  'udp://tracker.openbittorrent.com:6969/announce',
+  'udp://tracker.dler.org:6969/announce',
+  'udp://tracker.bittor.pw:1337/announce',
+  'udp://9.rarbg.com:2810/announce',
+  'udp://tracker-udp.gbitt.info:80/announce',
+  'udp://explodie.org:6969/announce',
+  'http://tracker.opentrackr.org:1337/announce',
+  'http://nyaa.tracker.wf:7777/announce',
+  'wss://tracker.openwebtorrent.com',
+  'wss://tracker.webtorrent.dev',
+  'wss://tracker.btorrent.xyz',
+];
+
 function getWT(){
   if (!wtClient && WebTorrent){
-    wtClient = new WebTorrent();
+    /* v5.4.5: más peer slots + DHT + PEX + LSD */
+    wtClient = new WebTorrent({
+      maxConns: 200,
+      dht: true,
+      utPex: true,
+      lsd: true,
+    });
     wtClient.on('error', e => console.warn('[WT]', e.message));
   }
   return wtClient;
@@ -270,7 +296,11 @@ ipcMain.handle('stream-torrent', (_e, magnet)=>{
     const to = setTimeout(()=>done(new Error('Timeout metadata')), 30000);
     client.once('error', e=>done(e));
 
-    client.add(magnet, { path: path.join(os.tmpdir(),'novacine') }, torrent=>{
+    client.add(magnet, {
+      path: path.join(os.tmpdir(),'novacine'),
+      announce: NATIVE_TRACKERS,
+      maxWebConns: 8,
+    }, torrent=>{
       activeTorrent = torrent;
       const EXT = ['.mp4','.mkv','.avi','.mov','.webm','.m4v','.ts'];
       const vFiles = torrent.files.filter(f => EXT.some(x=>f.name.toLowerCase().endsWith(x)));
