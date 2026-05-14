@@ -235,7 +235,7 @@ ipcMain.handle('search-torrents', async (_e, { imdbId, title, type, season, epis
 /* v5.3.1: auto-update desde GitHub Releases */
 ipcMain.handle('check-update', async () => {
   try {
-    const repo = 'magamod300/Nova-Cine';
+    const repo = 'magamod300/Nova-Cine-v5';
     const data = await fetchJSON(`https://api.github.com/repos/${repo}/releases/latest`);
     if (!data || !data.tag_name) return { hasUpdate: false };
     const current = require('./package.json').version;
