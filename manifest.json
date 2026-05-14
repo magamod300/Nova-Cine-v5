@@ -1,0 +1,14 @@
+{
+  "name": "NovaCine",
+  "short_name": "NovaCine",
+  "description": "Streaming sin anuncios — películas, series y anime",
+  "start_url": "./novacine.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#09090f",
+  "theme_color": "#e5383b",
+  "icons": [
+    { "src": "assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

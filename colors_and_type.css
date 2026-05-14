@@ -1,0 +1,177 @@
+/* ═══════════════════════════════════════════════════════════════
+   NovaCine Design Tokens
+   Extracted from resources/app/src/index.html
+   ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
+
+@font-face {
+  font-family: 'Netflix Sans';
+  src: url('fonts/Netflix_Sans_Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Netflix Sans';
+  src: url('fonts/Netflix_Sans_Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Netflix Sans';
+  /* v5.3.3: 400 (Regular) mapeaba a Medium.otf \u2014 demasiado pesado para body. Ahora mapea a Light, m\u00e1s cercano a Regular real. Si en alg\u00fan momento se a\u00f1ade un Regular.otf nativo, descomentar abajo. */
+  src: url('fonts/Netflix_Sans_Light.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Netflix Sans';
+  src: url('fonts/Netflix_Sans_Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ─── COLOR ───────────────────────────────────────────────── */
+
+  /* Backgrounds (dark → less dark) */
+  --bg:    #090910;
+  --s1:    #0f0f1a;
+  --s2:    #161625;
+  --s3:    #1e1e32;
+
+  /* Lines & text */
+  --bdr:   #252540;
+  --faint: #363655;
+  --dim:   #666685;
+  --txt:   #eaeaf0;
+
+  /* Accents */
+  --red:   #e5383b;   /* signature */
+  --red-h: #c9292c;   /* red hover */
+  --grn:   #4ade80;   /* success / spanish / seeders */
+  --grn-h: #22c55e;
+  --gold:  #fbbf24;   /* rating / dub */
+  --blu:   #60a5fa;   /* lang tags */
+  --pur:   #a78bfa;   /* favorites */
+
+  /* Tinted variants — for capsule tags (used inline in source) */
+  --red-tint:    rgba(229,56,59,.15);
+  --red-tint-b:  rgba(229,56,59,.28);
+  --grn-tint:    rgba(74,222,128,.12);
+  --grn-tint-b:  rgba(74,222,128,.25);
+  --gold-tint:   rgba(251,191,36,.12);
+  --gold-tint-b: rgba(251,191,36,.25);
+  --blu-tint:    rgba(96,165,250,.10);
+  --blu-tint-b:  rgba(96,165,250,.20);
+  --pur-tint:    rgba(167,139,250,.15);
+  --pur-tint-b:  rgba(167,139,250,.30);
+
+  /* ─── TYPE ────────────────────────────────────────────────── */
+  --font-display: 'Bebas Neue', 'Impact', sans-serif;
+  --font-body:    'Netflix Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:    ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Sizes — extracted from source */
+  --fs-logo:    1.8rem;     /* logo */
+  --fs-title:   2rem;       /* player title (clamp) */
+  --fs-h2:      1.05rem;    /* episode numbers */
+  --fs-body:    .87rem;     /* main inputs */
+  --fs-default: .8rem;      /* buttons */
+  --fs-sm:      .76rem;     /* secondary buttons, tips */
+  --fs-xs:      .72rem;     /* labels */
+  --fs-2xs:     .67rem;     /* captions, footer */
+  --fs-3xs:     .6rem;      /* tags, micro */
+
+  /* Weights — Netflix Sans 300 / 400-500 / 700 */
+  --fw-light:  300;
+  --fw-reg:    400;
+  --fw-med:    500;
+  --fw-bold:   700;
+
+  /* Letter spacing */
+  --ls-logo:    .08em;
+  --ls-title:   .04em;
+  --ls-label:   .2em;
+  --ls-sm:      .16em;
+
+  /* ─── RADII ───────────────────────────────────────────────── */
+  --r-tag:    3px;
+  --r-btn:    5px;
+  --r-input:  6px;
+  --r-card:   6px;
+  --r-player: 8px;
+
+  /* ─── SHADOW ──────────────────────────────────────────────── */
+  --sh-toast:    0 4px 24px rgba(0,0,0,.65);
+  --sh-dropdown: 0 12px 40px rgba(0,0,0,.8);
+  --sh-player:   0 18px 56px rgba(0,0,0,.7);
+
+  /* ─── LAYOUT ──────────────────────────────────────────────── */
+  --container:    1180px;
+  --gutter:       18px;
+  --header-blur:  blur(14px);
+
+  /* ─── MOTION ──────────────────────────────────────────────── */
+  --t-fast: .15s;
+  --t-med:  .18s;
+  --t-slow: .22s;
+}
+
+/* ─── SEMANTIC TYPE ─────────────────────────────────────────── */
+
+.h1, h1.nc {
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 3.5vw, 2rem);
+  letter-spacing: var(--ls-title);
+  line-height: 1;
+  color: var(--txt);
+}
+.h2, h2.nc {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: var(--ls-title);
+  line-height: 1;
+}
+.label, .section-label {
+  font-family: var(--font-body);
+  font-weight: var(--fw-med);
+  font-size: var(--fs-2xs);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.body, p.nc {
+  font-family: var(--font-body);
+  font-weight: var(--fw-reg);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--txt);
+}
+.caption, small.nc {
+  font-family: var(--font-body);
+  font-weight: var(--fw-reg);
+  font-size: var(--fs-2xs);
+  color: var(--dim);
+}
+.tag {
+  font-family: var(--font-body);
+  font-weight: var(--fw-med);
+  font-size: var(--fs-3xs);
+  padding: 2px 7px;
+  border-radius: var(--r-tag);
+  display: inline-flex; align-items: center;
+}
+
+/* ─── BASE ──────────────────────────────────────────────────── */
+
+body.nc {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}

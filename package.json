@@ -1,0 +1,52 @@
+{
+  "name": "novacine",
+  "productName": "NovaCine",
+  "version": "5.4.1",
+  "description": "Streaming sin anuncios — películas, series, anime, torrents",
+  "main": "electron-main.js",
+  "author": "magamod300",
+  "license": "ISC",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "webtorrent": "^1.9.7"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.0"
+  },
+  "build": {
+    "appId": "com.magamod300.novacine",
+    "productName": "NovaCine",
+    "files": [
+      "electron-main.js",
+      "preload.js",
+      "index.html",
+      "novacine.html",
+      "torrent.html",
+      "colors_and_type.css",
+      "manifest.json",
+      "sw.js",
+      "assets/**/*",
+      "fonts/**/*"
+    ],
+    "win": {
+      "icon": "assets/icons/icon.svg",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "NovaCine"
+    },
+    "portable": {
+      "artifactName": "NovaCine-Portable-${version}.exe"
+    }
+  }
+}

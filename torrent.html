@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NovaCine · Torrent Player</title>
+<script src="https://cdn.jsdelivr.net/npm/webtorrent@1.9.7/webtorrent.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg:       #090910;
+  --s1:       #0f0f1a;
+  --s2:       #161625;
+  --s3:       #1e1e32;
+  --bdr:      #252540;
+  --dim:      #666685;
+  --txt:      #eaeaf0;
+  --red:      #e5383b;
+  --red-h:    #c9292c;
+  --grn:      #4ade80;
+  --gold:     #fbbf24;
+  --blu:      #60a5fa;
+  --pur:      #a78bfa;
+  --font-d:   'Bebas Neue', Impact, sans-serif;
+  --font-b:   'DM Sans', system-ui, sans-serif;
+  --font-m:   'DM Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: var(--font-b);
+  font-size: 14px;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── HEADER ── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid var(--bdr);
+  background: rgba(9,9,16,.95); backdrop-filter: blur(14px);
+  position: sticky; top: 0; z-index: 100;
+}
+.logo { font-family: var(--font-d); font-size: 1.6rem; letter-spacing: .06em; line-height: 1; }
+.logo em { color: var(--red); font-style: normal; }
+.logo span { font-size: .55rem; font-family: var(--font-b); color: var(--dim); letter-spacing: .2em;
+  text-transform: uppercase; display: block; margin-top: 1px; }
+.hbadge { background: rgba(229,56,59,.12); border: 1px solid rgba(229,56,59,.28);
+  color: var(--red); font-size: .62rem; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; padding: 3px 9px; border-radius: 4px; }
+
+main { max-width: 1060px; margin: 0 auto; padding: 24px 18px 60px; }
+
+/* ── DROP ZONE ── */
+#dropzone {
+  border: 2px dashed var(--bdr); border-radius: 10px;
+  padding: 40px 20px; text-align: center; cursor: pointer;
+  transition: all .2s; position: relative; overflow: hidden;
+  background: var(--s1);
+}
+#dropzone.drag { border-color: var(--red); background: rgba(229,56,59,.06); }
+#dropzone.hidden { display: none; }
+.dz-icon { font-size: 2.4rem; margin-bottom: 12px; opacity: .6; }
+.dz-title { font-family: var(--font-d); font-size: 1.4rem; letter-spacing: .04em; margin-bottom: 6px; color: var(--txt); }
+.dz-sub { font-size: .78rem; color: var(--dim); line-height: 1.6; margin-bottom: 18px; }
+.dz-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.btn { border: none; cursor: pointer; border-radius: 6px; font-size: .78rem; font-weight: 500;
+  padding: 9px 16px; transition: all .15s; display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-b); white-space: nowrap; }
+.btn-r { background: var(--red); color: #fff; }
+.btn-r:hover { background: var(--red-h); }
+.btn-g { background: transparent; border: 1px solid var(--bdr); color: var(--dim); }
+.btn-g:hover { border-color: var(--dim); color: var(--txt); }
+.btn-grn { background: var(--grn); color: #0a0a14; font-weight: 600; }
+.btn-grn:hover { background: #22c55e; }
+.magnet-row { display: flex; gap: 8px; margin-top: 14px; }
+.magnet-row input {
+  flex: 1; background: var(--s2); border: 1px solid var(--bdr); border-radius: 6px;
+  padding: 9px 13px; font-size: .82rem; color: var(--txt); outline: none;
+  font-family: var(--font-b); transition: border-color .15s;
+}
+.magnet-row input::placeholder { color: var(--dim); }
+.magnet-row input:focus { border-color: var(--red); }
+#fileIn { display: none; }
+
+/* ── TORRENT CONTAINER ── */
+#torrentUI { display: none; }
+#torrentUI.on { display: block; }
+
+/* ── VIDEO SECTION ── */
+.video-wrap {
+  position: relative; width: 100%; aspect-ratio: 16/9;
+  background: #000; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--bdr); box-shadow: 0 18px 56px rgba(0,0,0,.75);
+  margin-bottom: 14px;
+}
+#vid { width: 100%; height: 100%; display: block; }
+.vid-loading {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px;
+  background: #000; pointer-events: none;
+}
+.vid-loading.hidden { display: none; }
+.spin { width: 34px; height: 34px; border: 2.5px solid rgba(255,255,255,.08);
+  border-top-color: var(--red); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.vid-loading p { font-size: .78rem; color: var(--dim); }
+
+/* ── STATS BAR ── */
+.stats-bar {
+  display: flex; gap: 0; flex-wrap: wrap;
+  background: var(--s1); border: 1px solid var(--bdr); border-radius: 8px;
+  margin-bottom: 10px; overflow: hidden;
+}
+.stat {
+  flex: 1; min-width: 90px; padding: 10px 14px;
+  border-right: 1px solid var(--bdr); text-align: center;
+}
+.stat:last-child { border-right: none; }
+.stat-val {
+  font-family: var(--font-d); font-size: 1.15rem; letter-spacing: .04em;
+  color: var(--txt); line-height: 1;
+}
+.stat-val.grn { color: var(--grn); }
+.stat-val.gold { color: var(--gold); }
+.stat-val.red { color: var(--red); }
+.stat-val.blu { color: var(--blu); }
+.stat-lbl { font-size: .58rem; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--dim); margin-top: 3px; }
+
+/* ── PIECE MAP ── */
+.piece-wrap { margin-bottom: 10px; }
+.piece-label {
+  font-size: .6rem; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--dim); display: flex; align-items: center; gap: 8px; margin-bottom: 5px;
+}
+.piece-label::after { content: ''; flex: 1; height: 1px; background: var(--bdr); }
+#pieceMap {
+  height: 12px; border-radius: 4px; overflow: hidden;
+  background: var(--s2); border: 1px solid var(--bdr);
+  display: flex; position: relative;
+}
+.piece-seg {
+  height: 100%; transition: background .3s;
+}
+/* Playhead indicator */
+#playhead {
+  position: absolute; top: 0; bottom: 0; width: 2px;
+  background: rgba(255,255,255,.7); pointer-events: none;
+  transition: left .5s linear;
+}
+
+/* ── FILE LIST ── */
+.section-lbl {
+  font-size: .6rem; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--dim); display: flex; align-items: center; gap: 8px;
+  margin: 14px 0 8px;
+}
+.section-lbl::after { content: ''; flex: 1; height: 1px; background: var(--bdr); }
+
+.file-list { display: flex; flex-direction: column; gap: 4px; }
+.file-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  border-radius: 6px; border: 1px solid var(--bdr); background: var(--s1);
+  cursor: pointer; transition: all .15s;
+}
+.file-item:hover { border-color: var(--dim); background: var(--s2); }
+.file-item.on { border-color: var(--red); background: rgba(229,56,59,.08); }
+.file-icon { font-size: 1rem; flex-shrink: 0; }
+.file-name { flex: 1; font-size: .78rem; font-weight: 500; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.file-size { font-size: .68rem; color: var(--dim); font-family: var(--font-m);
+  flex-shrink: 0; }
+.file-prog { height: 2px; background: var(--s3); border-radius: 1px; margin-top: 4px; }
+.file-prog-bar { height: 100%; background: var(--grn); border-radius: 1px; transition: width .5s; }
+
+/* ── TORRENT INFO ── */
+.info-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px; margin-bottom: 12px;
+}
+.info-card {
+  background: var(--s1); border: 1px solid var(--bdr); border-radius: 7px;
+  padding: 10px 12px;
+}
+.info-card .lbl { font-size: .58rem; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--dim); margin-bottom: 4px; }
+.info-card .val { font-size: .78rem; font-family: var(--font-m); color: var(--txt);
+  word-break: break-all; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── PEER LIST ── */
+.peer-chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.peer-chip {
+  background: var(--s2); border: 1px solid var(--bdr); border-radius: 4px;
+  font-size: .6rem; font-family: var(--font-m); padding: 2px 7px; color: var(--dim);
+}
+.peer-chip.seeder { border-color: rgba(74,222,128,.3); color: var(--grn); }
+
+/* ── CONTROLS ROW ── */
+.ctrl-row { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 14px; }
+
+/* ── TOAST ── */
+#toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--s2); border: 1px solid var(--bdr); border-radius: 7px;
+  padding: 10px 18px; font-size: .8rem; box-shadow: 0 8px 30px rgba(0,0,0,.6);
+  opacity: 0; pointer-events: none; transition: all .2s; z-index: 500; max-width: 90vw;
+  text-align: center;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.ok { border-color: var(--grn); color: var(--grn); }
+#toast.err { border-color: var(--red); color: var(--red); }
+
+/* ── PRIORITY DEBUG PANEL ── */
+.dbg {
+  background: var(--s1); border: 1px solid var(--bdr); border-radius: 7px;
+  padding: 10px 14px; margin-top: 10px; font-size: .68rem; font-family: var(--font-m);
+  color: var(--dim); line-height: 1.8; display: none;
+}
+.dbg.on { display: block; }
+.dbg strong { color: var(--grn); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 600px) {
+  .stat { min-width: 70px; padding: 8px 10px; }
+  .stat-val { font-size: .9rem; }
+  main { padding: 14px 12px 40px; }
+  .stats-bar { gap: 0; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    Nova<em>Cine</em>
+    <span>Torrent Engine</span>
+  </div>
+  <div class="hbadge">P2P · WebRTC</div>
+</header>
+
+<main>
+
+  <!-- DROP ZONE -->
+  <div id="dropzone">
+    <div class="dz-icon">⚡</div>
+    <div class="dz-title">Arrastra tu torrent aquí</div>
+    <div class="dz-sub">
+      Archivo <strong>.torrent</strong> o pega un <strong>magnet link</strong> abajo<br>
+      Streaming empieza antes de completar la descarga · Seek inteligente · Sin instalación
+    </div>
+    <div class="dz-row">
+      <button class="btn btn-r" onclick="document.getElementById('fileIn').click()">
+        📂 Abrir .torrent
+      </button>
+    </div>
+    <div class="magnet-row">
+      <input id="magnetIn" placeholder="magnet:?xt=urn:btih:…  o  infohash de 40 chars" autocomplete="off" spellcheck="false">
+      <button class="btn btn-r" onclick="loadMagnet()">▶ Reproducir</button>
+    </div>
+    <input type="file" id="fileIn" accept=".torrent">
+  </div>
+
+  <!-- TORRENT UI -->
+  <div id="torrentUI">
+
+    <!-- VIDEO -->
+    <div class="video-wrap">
+      <video id="vid" controls preload="auto" playsinline></video>
+      <div id="vidLoading" class="vid-loading">
+        <div class="spin"></div>
+        <p id="vidMsg">Conectando a peers…</p>
+      </div>
+    </div>
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+      <div class="stat">
+        <div class="stat-val grn" id="sDown">0 KB/s</div>
+        <div class="stat-lbl">↓ Descarga</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val blu" id="sUp">0 KB/s</div>
+        <div class="stat-lbl">↑ Subida</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val gold" id="sPeers">0</div>
+        <div class="stat-lbl">Peers</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="sProg">0%</div>
+        <div class="stat-lbl">Progreso</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="sEta">—</div>
+        <div class="stat-lbl">ETA</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="sRatio">0.00</div>
+        <div class="stat-lbl">Ratio</div>
+      </div>
+    </div>
+
+    <!-- PIECE MAP -->
+    <div class="piece-wrap">
+      <div class="piece-label">Mapa de piezas</div>
+      <div id="pieceMap"><div id="playhead"></div></div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="ctrl-row">
+      <button class="btn btn-g" onclick="newTorrent()">↩ Nuevo torrent</button>
+      <button class="btn btn-g" id="btnDbg" onclick="toggleDbg()">🔎 Debug</button>
+      <button class="btn btn-g" onclick="copyMagnet()">🔗 Copiar magnet</button>
+      <button class="btn btn-g" id="btnSub" onclick="loadSub()" style="display:none">🗄 Subtítulos</button>
+    </div>
+
+    <!-- FILE LIST -->
+    <div class="section-lbl">Archivos del torrent</div>
+    <div id="fileList" class="file-list"></div>
+
+    <!-- TORRENT INFO -->
+    <div class="section-lbl">Info</div>
+    <div class="info-grid">
+      <div class="info-card"><div class="lbl">Hash</div><div class="val" id="iHash">—</div></div>
+      <div class="info-card"><div class="lbl">Tamaño total</div><div class="val" id="iSize">—</div></div>
+      <div class="info-card"><div class="lbl">Piezas</div><div class="val" id="iPieces">—</div></div>
+      <div class="info-card"><div class="lbl">Trackers</div><div class="val" id="iTrackers">—</div></div>
+    </div>
+
+    <!-- PEER LIST -->
+    <div class="section-lbl">Peers activos</div>
+    <div id="peerList" class="peer-chips"></div>
+
+    <!-- DEBUG PANEL -->
+    <div id="dbgPanel" class="dbg"></div>
+
+  </div><!-- /torrentUI -->
+
+</main>
+
+<div id="toast"></div>
+<input type="file" id="subIn" accept=".vtt,.srt" style="display:none">
+
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════════
+   TRACKER LIST — WebSocket trackers que WebTorrent
+   puede usar desde el browser (no UDP)
+══════════════════════════════════════════════ */
+const const TRACKERS = [
+  /* v5.4.0: lista limpia 2025 — solo trackers WSS verificados activos.
+     Fuera: btorrent.xyz (intermitente), fastcast.nz, files.fm:7073, spacetradersapi (heroku free murió). */
+  'wss://tracker.openwebtorrent.com',     /* el más fiable */
+  'wss://tracker.webtorrent.dev',         /* canónico de WebTorrent */
+  'wss://tracker.btorrent.xyz',           /* aún en pie a veces */
+];
+
+/* ══════════════════════════════════════════════
+   CONFIG
+══════════════════════════════════════════════ */
+const FIRST_PRIORITY_BYTES = 8  * 1024 * 1024;  // 8 MB — moov atom, header
+const LAST_PRIORITY_BYTES  = 2  * 1024 * 1024;  // 2 MB — moov at end (no-faststart)
+const SEEK_PRIORITY_BYTES  = 10 * 1024 * 1024;  // 10 MB lookahead al hacer seek
+const MAX_PIECES_IN_MAP    = 800;               // resolución del mapa visual
+
+/* ══════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════ */
+let client      = null;
+let activeTorrent = null;
+let activeFile  = null;
+let statsTimer  = null;
+let mapTimer    = null;
+let dbgOn       = false;
+let subBlobUrl  = null;
+
+/* ══════════════════════════════════════════════
+   UTILS
+══════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+
+function fmtBytes(b) {
+  if (!b) return '0 B';
+  if (b >= 1e12) return (b/1e12).toFixed(2) + ' TB';
+  if (b >= 1e9)  return (b/1e9).toFixed(2)  + ' GB';
+  if (b >= 1e6)  return (b/1e6).toFixed(1)  + ' MB';
+  if (b >= 1e3)  return (b/1e3).toFixed(0)  + ' KB';
+  return b + ' B';
+}
+function fmtSpeed(b) {
+  if (!b) return '0 KB/s';
+  if (b >= 1e6)  return (b/1e6).toFixed(1)  + ' MB/s';
+  if (b >= 1e3)  return (b/1e3).toFixed(0)  + ' KB/s';
+  return b + ' B/s';
+}
+function fmtEta(sec) {
+  if (!isFinite(sec) || sec < 0 || sec > 86400*7) return '∞';
+  if (sec >= 3600) return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
+  if (sec >= 60)   return `${Math.floor(sec/60)}m ${Math.floor(sec%60)}s`;
+  return `${Math.floor(sec)}s`;
+}
+function fileIcon(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (/mp4|mkv|avi|mov|webm|m4v|ts/.test(ext)) return '🎬';
+  if (/mp3|flac|aac|ogg|wav/.test(ext))         return '🎵';
+  if (/srt|vtt|ass|ssa/.test(ext))               return '💬';
+  if (/jpg|jpeg|png|gif|webp/.test(ext))         return '🖼';
+  if (/pdf/.test(ext))                            return '📄';
+  return '📁';
+}
+function isVideo(name) {
+  return /\.(mp4|mkv|webm|m4v|avi|mov|ts)$/i.test(name);
+}
+function isSub(name) {
+  return /\.(srt|vtt|ass|ssa)$/i.test(name);
+}
+
+function toast(msg, cls = '', ms = 3200) {
+  const t = $('toast');
+  t.textContent = msg; t.className = 'toast ' + cls + ' show';
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+/* ══════════════════════════════════════════════
+   PIEZA → ÍNDICE  (convierte bytes a piece idx)
+══════════════════════════════════════════════ */
+function byteToPiece(torrent, byte) {
+  return Math.floor(byte / torrent.pieceLength);
+}
+function pieceToByte(torrent, piece) {
+  return piece * torrent.pieceLength;
+}
+
+/* ══════════════════════════════════════════════
+   PRIORIDAD INTELIGENTE
+   ─ Primeros N bytes: lectura del header MP4 (moov atom)
+   ─ Últimos N bytes:  moov atom al final (mp4 sin faststart)
+   ─ El resto: secuencial normal
+══════════════════════════════════════════════ */
+function applySmartPriority(torrent, file) {
+  if (!torrent || !file) return;
+
+  const pLen   = torrent.pieceLength;
+  const total  = file.length;
+  const offset = file.offset || 0; // byte start del file dentro del torrent
+
+  /* ① Deseleccionar TODOS los archivos (no descargar lo que no necesitamos) */
+  torrent.files.forEach(f => { try { f.deselect(); } catch {} });
+
+  /* ② Seleccionar el archivo objetivo — prioridad normal */
+  const pieceStart = byteToPiece(torrent, offset);
+  const pieceEnd   = byteToPiece(torrent, offset + total - 1);
+  torrent.select(pieceStart, pieceEnd, 0);
+
+  /* ③ CRÍTICO: primeros ~8MB del archivo */
+  const firstEnd = Math.min(offset + FIRST_PRIORITY_BYTES, offset + total - 1);
+  const cp1s = byteToPiece(torrent, offset);
+  const cp1e = byteToPiece(torrent, firstEnd);
+  torrent.critical(cp1s, cp1e);
+
+  /* ④ CRÍTICO: últimos ~2MB del archivo (moov atom al final) */
+  const lastStart = Math.max(offset, offset + total - LAST_PRIORITY_BYTES);
+  const cp2s = byteToPiece(torrent, lastStart);
+  const cp2e = byteToPiece(torrent, offset + total - 1);
+  if (cp2s !== cp1s) torrent.critical(cp2s, cp2e); // evitar doble-crítico en archivos pequeños
+
+  dbgLog(`🎯 Prioridad aplicada
+  Archivo: ${file.name} (${fmtBytes(total)})
+  Piezas totales: ${pieceStart}–${pieceEnd} (${pieceEnd - pieceStart + 1} piezas)
+  🔴 Crítico inicio: piezas ${cp1s}–${cp1e} (primeros ${fmtBytes(FIRST_PRIORITY_BYTES)})
+  🔴 Crítico final:  piezas ${cp2s}–${cp2e} (últimos ${fmtBytes(LAST_PRIORITY_BYTES)})
+  Pieza = ${fmtBytes(pLen)}`);
+}
+
+/* ══════════════════════════════════════════════
+   RE-PRIORIZACIÓN AL HACER SEEK
+══════════════════════════════════════════════ */
+function onSeek() {
+  if (!activeTorrent || !activeFile) return;
+  const vid = $('vid');
+  const duration = vid.duration;
+  if (!duration) return;
+
+  const ratio     = vid.currentTime / duration;
+  const bytePos   = Math.floor(ratio * activeFile.length) + (activeFile.offset || 0);
+  const seekEnd   = Math.min(bytePos + SEEK_PRIORITY_BYTES,
+                             (activeFile.offset || 0) + activeFile.length - 1);
+
+  const ps = byteToPiece(activeTorrent, bytePos);
+  const pe = byteToPiece(activeTorrent, seekEnd);
+  activeTorrent.critical(ps, pe);
+
+  dbgLog(`⏩ Seek a ${vid.currentTime.toFixed(1)}s (${(ratio*100).toFixed(1)}%)
+  → Crítico piezas ${ps}–${pe} (${fmtBytes(SEEK_PRIORITY_BYTES)} lookahead)`);
+}
+
+/* ══════════════════════════════════════════════
+   MAPA DE PIEZAS
+══════════════════════════════════════════════ */
+function buildPieceMap(torrent, file) {
+  const map = $('pieceMap');
+  map.innerHTML = '<div id="playhead"></div>';
+
+  if (!torrent || !torrent.bitfield) return;
+
+  const pLen       = torrent.pieceLength;
+  const offset     = file ? (file.offset || 0) : 0;
+  const totalBytes = file ? file.length : torrent.length;
+  const pieceStart = byteToPiece(torrent, offset);
+  const pieceEnd   = byteToPiece(torrent, offset + totalBytes - 1);
+  const totalPieces = pieceEnd - pieceStart + 1;
+  const buckets    = Math.min(totalPieces, MAX_PIECES_IN_MAP);
+  const perBucket  = totalPieces / buckets;
+
+  for (let i = 0; i < buckets; i++) {
+    const startP = pieceStart + Math.floor(i * perBucket);
+    const endP   = pieceStart + Math.floor((i + 1) * perBucket) - 1;
+    let have = 0, total = 0;
+    for (let p = startP; p <= endP; p++) {
+      total++;
+      if (torrent.bitfield && torrent.bitfield.get(p)) have++;
+    }
+    const ratio = total > 0 ? have / total : 0;
+    const seg = document.createElement('div');
+    seg.className = 'piece-seg';
+    seg.style.flex = '1';
+    if (ratio === 1) {
+      seg.style.background = 'var(--grn)';
+    } else if (ratio > 0) {
+      seg.style.background = `rgba(74,222,128,${0.2 + ratio * 0.6})`;
+    } else {
+      seg.style.background = 'var(--s3)';
+    }
+    seg.title = `Bucket ${i}: ${Math.round(ratio*100)}%`;
+    map.appendChild(seg);
+  }
+
+  // Playhead
+  const vid = $('vid');
+  if (vid && vid.duration && isFinite(vid.duration)) {
+    const pos = (vid.currentTime / vid.duration) * 100;
+    const ph = document.createElement('div');
+    ph.id = 'playhead';
+    ph.style.cssText = `position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.8);left:${pos}%;pointer-events:none;`;
+    map.appendChild(ph);
+  }
+}
+
+/* ══════════════════════════════════════════════
+   STATS UPDATE (cada 1s)
+══════════════════════════════════════════════ */
+function startStats(torrent, file) {
+  clearInterval(statsTimer);
+  clearInterval(mapTimer);
+
+  statsTimer = setInterval(() => {
+    if (!torrent) return;
+    $('sDown').textContent   = fmtSpeed(torrent.downloadSpeed);
+    $('sUp').textContent = fmtSpeed(torrent.uploadSpeed);
+    /* v5.3.9: actualizar color del badge sUp */
+    const _u = torrent.uploadSpeed;
+    $('sUp').className = 'stat-val ' + (_u > 100e3 ? 'blu' : _u > 0 ? 'gold' : 'dim');
+    $('sPeers').textContent  = torrent.numPeers;
+    $('sProg').textContent   = (torrent.progress * 100).toFixed(1) + '%';
+    $('sEta').textContent    = fmtEta(torrent.timeRemaining / 1000);
+    $('sRatio').textContent  = torrent.ratio.toFixed(2);
+
+    // file-level progress
+    if (file) {
+      const fp = document.getElementById('fp_' + sanitizeId(file.name));
+      if (fp) fp.style.width = (file.progress * 100) + '%';
+    }
+
+    // color coding
+    const down = torrent.downloadSpeed;
+    $('sDown').className = 'stat-val ' + (down > 500e3 ? 'grn' : down > 0 ? 'gold' : '');
+    $('sPeers').className = 'stat-val ' + (torrent.numPeers >= 3 ? 'grn' : torrent.numPeers > 0 ? 'gold' : 'red');
+
+    // peer chips
+    const pl = $('peerList');
+    pl.innerHTML = '';
+    (torrent.wires || []).slice(0, 20).forEach(w => {
+      const chip = document.createElement('div');
+      chip.className = 'peer-chip' + (!w.peerChoking ? ' seeder' : '');
+      chip.textContent = (w.remoteAddress || 'WebRTC') + (w.downloadSpeed ? ' ' + fmtSpeed(w.downloadSpeed) : '');
+      pl.appendChild(chip);
+    });
+
+  }, 1000);
+
+  // Mapa de piezas (menos frecuente — es más caro)
+  mapTimer = setInterval(() => buildPieceMap(torrent, file), 2000);
+}
+
+function sanitizeId(name) {
+  return name.replace(/[^a-z0-9]/gi, '_');
+}
+
+/* ══════════════════════════════════════════════
+   RENDER FILE LIST
+══════════════════════════════════════════════ */
+function renderFileList(torrent) {
+  const container = $('fileList');
+  container.innerHTML = '';
+
+  torrent.files.forEach(file => {
+    const item = document.createElement('div');
+    item.className = 'file-item' + (file === activeFile ? ' on' : '');
+    item.id = 'fi_' + sanitizeId(file.name);
+
+    item.innerHTML = `
+      <div class="file-icon">${fileIcon(file.name)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="file-name" title="${file.name}">${file.name}</div>
+        <div class="file-prog"><div class="file-prog-bar" id="fp_${sanitizeId(file.name)}" style="width:${file.progress*100}%"></div></div>
+      </div>
+      <div class="file-size">${fmtBytes(file.length)}</div>
+    `;
+
+    if (isVideo(file.name)) {
+      item.onclick = () => playFile(torrent, file);
+    } else if (isSub(file.name)) {
+      item.onclick = () => loadSubFromFile(file);
+    }
+
+    container.appendChild(item);
+  });
+
+  // Mostrar botón de subtítulos si hay .srt en el torrent
+  const hasSub = torrent.files.some(f => isSub(f.name));
+  $('btnSub').style.display = hasSub ? '' : 'none';
+}
+
+/* ══════════════════════════════════════════════
+   PLAY FILE
+══════════════════════════════════════════════ */
+function playFile(torrent, file) {
+  if (!isVideo(file.name)) return;
+  activeFile = file;
+
+  // Actualizar UI
+  document.querySelectorAll('.file-item').forEach(el => el.classList.remove('on'));
+  const fi = $('fi_' + sanitizeId(file.name));
+  if (fi) fi.classList.add('on');
+
+  // Mostrar loading
+  $('vidLoading').classList.remove('hidden');
+  $('vidMsg').textContent = 'Aplicando priorización inteligente…';
+
+  // ★ ESTRATEGIA ÓPTIMA ★
+  applySmartPriority(torrent, file);
+
+  // Renderizar al <video> — WebTorrent maneja MediaSource internamente
+  // y reprioritiza piezas dinámicamente según el currentTime del video
+  const vid = $('vid');
+  vid.oncanplay = () => {
+    $('vidLoading').classList.add('hidden');
+    toast(`▶ ${file.name.split('/').pop()}`, 'ok');
+  };
+  vid.onerror = () => {
+    dbgLog(`⚠ Error de codec — intentando Blob URL fallback`);
+    loadViaBlob(file);
+  };
+
+  // Seek listener → reprioritizar piezas alrededor del punto de seek
+  vid.removeEventListener('seeking', onSeek);
+  vid.addEventListener('seeking', onSeek);
+
+  // WebTorrent renderTo: crea MediaSource y alimenta el buffer conforme llegan piezas
+  try {
+    file.renderTo(vid, { autoplay: true }, err => {
+      if (err) {
+        /* v5.4.0: distinguir error real de "autoplay bloqueado" (no es bug, normal de Chrome) */
+        const msg = String(err.message||err);
+        if (/not allowed|user gesture|permission/i.test(msg)){
+          dbgLog(`ℹ Autoplay bloqueado por el navegador — pulsa ▶ en el video`);
+          toast('Click ▶ en el reproductor para empezar', 'ok', 6000);
+        } else {
+          dbgLog(`⚠ renderTo error: ${msg} — fallback a Blob`);
+          loadViaBlob(file);
+        }
+      }
+    });
+  } catch (e) {
+    dbgLog(`⚠ renderTo threw: ${e.message}`);
+    loadViaBlob(file);
+  }
+
+  // Mapa inicial
+  setTimeout(() => buildPieceMap(torrent, file), 500);
+
+  // Intentar cargar subtítulos del mismo torrent
+  autoLoadSubs(torrent);
+}
+
+/* ══════════════════════════════════════════════
+   FALLBACK: Blob URL (para MKV, etc.)
+══════════════════════════════════════════════ */
+function loadViaBlob(file) {
+  $('vidMsg').textContent = 'Descargando para reproducir…';
+  toast('Descargando archivo completo para este formato…', '', 4000);
+  file.blob((err, blob) => {
+    if (err) { toast('Error cargando archivo: ' + err.message, 'err'); return; }
+    const url = URL.createObjectURL(blob);
+    $('vid').src = url;
+    $('vid').play().catch(() => {});
+    $('vidLoading').classList.add('hidden');
+  });
+}
+
+/* ══════════════════════════════════════════════
+   AUTO SUBTÍTULOS desde el torrent
+══════════════════════════════════════════════ */
+function autoLoadSubs(torrent) {
+  if (!activeFile) return;
+  const baseName = activeFile.name.replace(/\.[^.]+$/, '').toLowerCase();
+  const subFile = torrent.files.find(f =>
+    isSub(f.name) && f.name.toLowerCase().includes(baseName.split('/').pop())
+  );
+  if (!subFile) return;
+  loadSubFromFile(subFile);
+}
+
+function loadSubFromFile(file) {
+  if (subBlobUrl) URL.revokeObjectURL(subBlobUrl);
+  const isSrtFile = file.name.endsWith('.srt');
+
+  file.getBuffer((err, buf) => {
+    if (err) return;
+    let content = new TextDecoder().decode(buf);
+    if (isSrtFile) content = srtToVtt(content);
+    const blob = new Blob([content], { type: 'text/vtt' });
+    subBlobUrl = URL.createObjectURL(blob);
+    attachSubtitle(subBlobUrl, file.name.split('/').pop());
+    toast(`💬 Subtítulos: ${file.name.split('/').pop()}`, 'ok');
+  });
+}
+
+function attachSubtitle(url, label) {
+  const vid = $('vid');
+  // Remover pistas anteriores
+  Array.from(vid.querySelectorAll('track')).forEach(t => t.remove());
+  const track = document.createElement('track');
+  track.kind    = 'subtitles';
+  track.src     = url;
+  track.srclang = 'es';
+  track.label   = label;
+  track.default = true;
+  vid.appendChild(track);
+  vid.textTracks[0] && (vid.textTracks[0].mode = 'showing');
+}
+
+/* ── SRT → WebVTT converter ── */
+function srtToVtt(srt) {
+  return 'WEBVTT\n\n' + srt
+    .replace(/\r\n|\r/g, '\n')
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
+    .trim();
+}
+
+/* ══════════════════════════════════════════════
+   SUBTÍTULOS EXTERNOS (botón)
+══════════════════════════════════════════════ */
+function loadSub() {
+  $('subIn').click();
+}
+$('subIn').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    let content = ev.target.result;
+    if (f.name.endsWith('.srt')) content = srtToVtt(content);
+    if (subBlobUrl) URL.revokeObjectURL(subBlobUrl);
+    const blob = new Blob([content], { type: 'text/vtt' });
+    subBlobUrl = URL.createObjectURL(blob);
+    attachSubtitle(subBlobUrl, f.name);
+    toast(`💬 Subtítulos cargados: ${f.name}`, 'ok');
+  };
+  reader.readAsText(f);
+});
+
+/* ══════════════════════════════════════════════
+   DEBUG LOG
+══════════════════════════════════════════════ */
+function dbgLog(msg) {
+  const panel = $('dbgPanel');
+  const ts = new Date().toTimeString().slice(0, 8);
+  const line = `<strong>[${ts}]</strong> ${msg.replace(/\n/g, '<br>  ')}\n`;
+  panel.innerHTML = line + panel.innerHTML;
+  // Max 30 entries
+  const lines = panel.innerHTML.split('<strong>');
+  if (lines.length > 31) panel.innerHTML = lines.slice(0, 31).join('<strong>');
+}
+function toggleDbg() {
+  dbgOn = !dbgOn;
+  $('dbgPanel').className = 'dbg' + (dbgOn ? ' on' : '');
+  $('btnDbg').textContent = dbgOn ? '🔎 Ocultar debug' : '🔎 Debug';
+}
+
+/* ══════════════════════════════════════════════
+   LOAD TORRENT — función principal
+══════════════════════════════════════════════ */
+function initClient() {
+  if (client) { try { client.destroy(); } catch {} }
+  client = new WebTorrent({
+    tracker: { rtcConfig: { iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
+    ]}}
+  });
+  client.on('error', e => {
+    toast('Error WebTorrent: ' + e.message, 'err');
+    dbgLog('❌ client error: ' + e.message);
+  });
+}
+
+function addTorrent(input) {
+  // input = magnet string | File | .torrent ArrayBuffer
+  if (typeof WebTorrent === 'undefined') {
+    toast('WebTorrent no cargó — revisa tu conexión', 'err', 5000);
+    dbgLog('❌ WebTorrent CDN no disponible. Recarga la página (Ctrl+Shift+R).');
+    return;
+  }
+  if (!client) initClient();
+
+  /* v5.3.7: log defensivo para diagnosticar "Invalid torrent identifier" */
+  console.log('[addTorrent] input type:', input?.constructor?.name || typeof input,
+    '· length:', input?.length || input?.byteLength || 'n/a',
+    '· sample:', typeof input === 'string' ? input.slice(0,80) : (input?.[0] ? `byte0=${input[0]} (should be 100 for .torrent)` : '?'));
+
+  // Si ya hay un torrent activo, destruirlo limpiamente
+  if (activeTorrent) {
+    try { client.remove(activeTorrent.infoHash); } catch {}
+    activeTorrent = null; activeFile = null;
+    clearInterval(statsTimer); clearInterval(mapTimer);
+  }
+
+  $('dropzone').classList.add('hidden');
+  $('torrentUI').classList.add('on');
+  $('vidLoading').classList.remove('hidden');
+  $('vidMsg').textContent = 'Obteniendo metadata…';
+  $('peerList').innerHTML = '';
+  $('fileList').innerHTML = '';
+  $('dbgPanel').innerHTML = '';
+
+  dbgLog(`📦 Añadiendo torrent…\nTrackers extra: ${TRACKERS.join(', ')}`);
+
+  const opts = {
+    announce: TRACKERS,
+    strategy: 'sequential',   // descarga en orden = mejor streaming
+    storeCacheSlots: 50,       // más cache en memoria = menos re-requests
+  };
+
+  /* v5.3.7: try/catch para capturar errores de parse-torrent y reportar al usuario */
+  try {
+    client.add(input, opts, torrent => {
+    activeTorrent = torrent;
+    dbgLog(`✅ Metadata lista
+  Hash: ${torrent.infoHash}
+  Nombre: ${torrent.name}
+  Tamaño: ${fmtBytes(torrent.length)}
+  Piezas: ${torrent.pieces.length} × ${fmtBytes(torrent.pieceLength)}`);
+
+    // Info cards
+    $('iHash').textContent     = torrent.infoHash;
+    $('iSize').textContent     = fmtBytes(torrent.length);
+    $('iPieces').textContent   = `${torrent.pieces.length} × ${fmtBytes(torrent.pieceLength)}`;
+    $('iTrackers').textContent = torrent.announce.length;
+
+    // Render lista de archivos
+    renderFileList(torrent);
+
+    // Arrancar stats
+    startStats(torrent, null);
+
+    // ★ AUTO-PLAY: buscar el archivo de video más grande
+    const videos = torrent.files.filter(f => isVideo(f.name));
+    if (videos.length) {
+      // Ordenar por tamaño descendente
+      videos.sort((a, b) => b.length - a.length);
+      const best = videos[0];
+      dbgLog(`🎬 Auto-play: ${best.name} (${fmtBytes(best.length)})`);
+      playFile(torrent, best);
+      startStats(torrent, best);
+    } else {
+      $('vidMsg').textContent = 'Sin archivo de video — selecciona un archivo de la lista';
+      toast('No se encontró video en este torrent', 'err');
+    }
+
+    // Evento: pieza verificada
+    torrent.on('done', () => {
+      toast('✅ Descarga completa · Ratio: ' + torrent.ratio.toFixed(2), 'ok', 5000);
+      dbgLog('🏁 Torrent completo. Ratio: ' + torrent.ratio.toFixed(2));
+    });
+
+    torrent.on('warning', w => {
+      dbgLog('⚠ ' + (w.message || w));
+    });
+  });
+  } catch(err) {
+    const msg = err?.message || String(err);
+    console.error('[addTorrent] client.add threw:', err);
+    dbgLog('❌ client.add() lanzó: ' + msg);
+    toast('Error al añadir torrent: ' + msg, 'err', 5000);
+  }
+}
+
+/* ══════════════════════════════════════════════
+   INPUT HANDLERS
+══════════════════════════════════════════════ */
+function loadMagnet() {
+  let val = $('magnetIn').value.trim();
+  if (!val) return;
+  // Soporte para infohash suelto (40 hex chars)
+  if (/^[0-9a-f]{40}$/i.test(val)) {
+    val = `magnet:?xt=urn:btih:${val}`;
+  }
+  if (!val.startsWith('magnet:')) {
+    toast('Formato inválido — usa magnet link o infohash de 40 chars', 'err');
+    return;
+  }
+  addTorrent(val);
+}
+
+$('magnetIn').addEventListener('keydown', e => {
+  if (e.key === 'Enter') loadMagnet();
+});
+
+$('fileIn').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  /* v5.3.9: pasar File directo — WebTorrent parse-torrent reconoce Blob/File pero NO Uint8Array */
+  addTorrent(f);
+  e.target.value = ''; // reset para permitir el mismo archivo
+});
+
+/* ── Drag & Drop ── */
+const dz = $('dropzone');
+['dragenter','dragover'].forEach(ev =>
+  dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drag'); })
+);
+['dragleave','drop'].forEach(ev =>
+  dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drag'); })
+);
+dz.addEventListener('drop', e => {
+  const files = e.dataTransfer.files;
+  if (!files.length) return;
+  const f = files[0];
+  if (f.name.endsWith('.torrent')) {
+    /* v5.3.9: pasar File directo a WebTorrent — Uint8Array no se reconoce como Buffer */
+    addTorrent(f);
+  } else {
+    toast('Solo se aceptan archivos .torrent', 'err');
+  }
+});
+
+// También soporte de arrastrar texto (magnet link)
+/* v5.3.4: auto-load magnet desde ?magnet=... (integración con NovaCine) */
+(function autoLoadFromUrl(){
+  try {
+    const params = new URLSearchParams(location.search);
+    const mag = params.get('magnet');
+    if (!mag) return;
+    /* v5.3.5: validar antes de inyectar — evita "Invalid torrent identifier" */
+    const trimmed = mag.trim();
+    let final;
+    if (/^magnet:\?[^&]*xt=urn:btih:[a-f0-9]{32,40}/i.test(trimmed)) {
+      final = trimmed; /* magnet completo válido */
+    } else if (/^[a-f0-9]{40}$/i.test(trimmed) || /^[a-z2-7]{32}$/i.test(trimmed)) {
+      /* hex de 40 chars o base32 de 32 chars */
+      final = 'magnet:?xt=urn:btih:' + trimmed;
+    } else {
+      console.warn('[autoLoad] magnet param inválido:', trimmed.slice(0,80));
+      setTimeout(() => toast('Magnet inválido en URL', 'err'), 500);
+      return;
+    }
+    $('magnetIn').value = final;
+    const tryLoad = () => {
+      if (typeof WebTorrent !== 'undefined' && typeof loadMagnet === 'function') {
+        loadMagnet();
+      } else {
+        setTimeout(tryLoad, 200);
+      }
+    };
+    setTimeout(tryLoad, 100);
+  } catch(e){ console.warn('autoLoad failed', e); }
+})();
+
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  const text = e.dataTransfer.getData('text');
+  if (text && text.startsWith('magnet:')) {
+    $('magnetIn').value = text;
+    loadMagnet();
+  }
+});
+
+/* ══════════════════════════════════════════════
+   CONTROLES
+══════════════════════════════════════════════ */
+function newTorrent() {
+  /* v5.3.9: limpiar handler oncanplay del video anterior */
+  const _v = $('vid'); if (_v) _v.oncanplay = null;
+  if (activeTorrent) {
+    try { client.remove(activeTorrent.infoHash); } catch {}
+    activeTorrent = null; activeFile = null;
+  }
+  clearInterval(statsTimer); clearInterval(mapTimer);
+  const vid = $('vid');
+  try { vid.pause(); vid.removeAttribute('src'); vid.load(); } catch {}
+  if (subBlobUrl) { URL.revokeObjectURL(subBlobUrl); subBlobUrl = null; }
+  $('torrentUI').classList.remove('on');
+  $('dropzone').classList.remove('hidden');
+  $('magnetIn').value = '';
+}
+
+function copyMagnet() {
+  if (!activeTorrent) return;
+  const magnet = activeTorrent.magnetURI;
+  navigator.clipboard?.writeText(magnet)
+    .then(() => toast('🔗 Magnet link copiado', 'ok'))
+    .catch(() => {
+      prompt('Copia el magnet link:', magnet);
+    });
+}
+
+/* ══════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════ */
+initClient();
+dbgLog('🚀 NovaCine Torrent Player iniciado\nWebTorrent: ' + WebTorrent.VERSION);
+</script>
+</body>
+</html>
