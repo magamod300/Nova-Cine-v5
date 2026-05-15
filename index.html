@@ -24,16 +24,29 @@
 <!-- v5: CinePro backend + hls.js para reproducción nativa .m3u8 -->
 <link rel="preconnect" href="https://nova-cine.onrender.com" crossorigin>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
-<!-- v5.4.5: Fallback de fonts — DM Sans como respaldo si Netflix Sans no carga -->
+<!-- v5.4.5: Fallback de fonts — si las .otf locales fallan (404 en .exe empaquetado),
+     Google Fonts entra como respaldo automático. DM Sans es la mejor alternativa estilística
+     a Netflix Sans, con weights idénticos (300/400/500/700). -->
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&display=swap">
 <style>
+  /* Si Netflix Sans no carga, el browser cae a la siguiente font automáticamente.
+     Añadimos DM Sans en la cadena para que sea el fallback antes de system-ui. */
   :root { --font-body: 'Netflix Sans', 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
 </style>
 <style>
 html{scroll-behavior:smooth}
 body{min-height:100vh;overflow-x:hidden;
   --accent:#e5383b;--accent2:#c9292c}
+/* v5.5.4: limitar altura del header sticky para que en mobile con keyboard abierta
+   no ocupe medio viewport y deje espacio al contenido scrollable
+   v5.5.7: + cuando el input tiene foco (keyboard abierto), header se vuelve no-sticky */
+@media (max-width:480px){
+  header{max-height:42vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  /* Cuando hay un input enfocado, dejar el header scrollable normal (sin sticky)
+     para que la keyboard no lo solape */
+  body:has(input:focus) header{position:relative}
+}
 body[data-theme="blue"]{--accent:#3b82f6;--accent2:#2563eb}
 body[data-theme="purple"]{--accent:#a78bfa;--accent2:#8b5cf6}
 body[data-theme="green"]{--accent:#22c55e;--accent2:#16a34a}
@@ -235,11 +248,8 @@ body.cinema .pmeta{max-width:1180px;margin:0 auto 13px}
 body.cinema #srvSection,body.cinema #latbar{max-width:1180px;margin-left:auto;margin-right:auto}
 #exitCinema{position:fixed;top:16px;right:16px;z-index:500;background:rgba(0,0,0,.6);border:1px solid var(--bdr);color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;display:none}
 body.cinema #exitCinema{display:block}
-.miniplay{position:fixed;bottom:18px;left:18px;width:280px;aspect-ratio:16/9;background:#000;
-  border:1px solid var(--bdr);border-radius:8px;overflow:hidden;z-index:200;display:none;box-shadow:0 12px 40px rgba(0,0,0,.8)}
-.miniplay.on{display:block}
-.miniplay-close{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.7);border:none;color:#fff;cursor:pointer;font-size:.78rem;line-height:1;z-index:2}
-/* v5.3.3: mini CSS-only sobre .video-wrap (sin mover el iframe → no recarga) */
+/* v5.5.4: selectores .miniplay/.miniplay-close legacy eliminados (DOM ya no existe).
+   v5.3.3: mini CSS-only sobre .video-wrap (sin mover el iframe → no recarga) */
 .mini-overlay{display:none}
 .video-wrap.mini{position:fixed!important;bottom:18px;left:18px;width:280px;height:auto;aspect-ratio:16/9;
   margin:0!important;max-height:none!important;z-index:200;box-shadow:0 12px 40px rgba(0,0,0,.8);cursor:pointer}
@@ -264,7 +274,7 @@ body.cinema #exitCinema{display:block}
 .audio-toggle{display:inline-flex;gap:4px;margin-left:6px}
 .audio-toggle button{background:var(--s2);border:1px solid var(--bdr);color:#a5a5b8;cursor:pointer;border-radius:4px;padding:3px 8px;font-size:.65rem;font-weight:500;font-family:inherit}
 .audio-toggle button.on{background:var(--grn);color:#0a0a14;border-color:var(--grn);font-weight:700}
-@media(max-width:600px){.miniplay{width:200px;left:10px;bottom:10px}.fab-bar{right:10px;bottom:60px}}
+@media(max-width:600px){.fab-bar{right:10px;bottom:60px}}
 
 /* ── Mobile-first improvements (v4.8) ── */
 @media (max-width: 768px) {
@@ -314,7 +324,7 @@ body.cinema #exitCinema{display:block}
   .tw-btn { width: 44px; height: 44px; bottom: 14px; right: 70px; }
   .tw-pnl { right: 12px; bottom: 70px; width: calc(100vw - 24px); max-width: 280px; }
   /* Mini player más grande en mobile horizontal */
-  .miniplay { width: 240px; }
+  .video-wrap.mini { width: 240px; }
   /* Modo cine vertical */
   body.cinema .video-wrap { max-height: 60vh; }
   body.cinema .pmeta { flex-direction: column; }
@@ -332,7 +342,7 @@ body.cinema #exitCinema{display:block}
   .sbtns { gap: 6px; }
   .sbtn { font-size: .76rem; padding: 8px 11px; }
   .sbtn .sq { display: none; } /* ocultar la calidad para ganar espacio */
-  .miniplay { width: 200px; aspect-ratio: 16/9; }
+  .video-wrap.mini { width: 200px; aspect-ratio: 16/9; }
   .fab { width: 44px; height: 44px; }
   /* DNS info compacto */
   .dns-server { font-size: .72rem !important; }
@@ -453,9 +463,8 @@ body.cinema #exitCinema{display:block}
 
 <button id="exitCinema" onclick="toggleCinema()">Salir modo cine ✕</button>
 
-<div class="miniplay" id="miniplay" title="Click para volver al player grande" style="display:none">
-  <!-- v5.3.3: deprecado · sustituido por .video-wrap.mini (CSS-only). Se mantiene oculto para compat con código viejo -->
-</div>
+<!-- v5.5.4: miniplay legacy DOM eliminado \u2014 sustituido por .video-wrap.mini (CSS-only)
+     desde v5.3.3. Se manten\u00eda oculto pero ocupando espacio + selector en CSS. -->
 
 <div class="modal" id="adminModal">
   <div class="modal-inner" style="position:relative">
@@ -564,16 +573,62 @@ body.cinema #exitCinema{display:block}
 </div>
 
 <script>
-/* ── v4.9 Caché TMDB en sessionStorage (1h) ── */
+/* ── v4.9 Caché TMDB en sessionStorage (1h) ──
+   v5.5.4: + LRU eviction \u2014 antes crec\u00eda infinito en memoria y sessionStorage.
+   Cap 200 entradas en memoria, sessionStorage purga >4MB. */
 const TMDB_CACHE = new Map();
+const TMDB_MEM_MAX = 200;
+function _tmdbCacheTouch(key, entry){
+  /* Move-to-end pattern para LRU */
+  TMDB_CACHE.delete(key);
+  TMDB_CACHE.set(key, entry);
+  if (TMDB_CACHE.size > TMDB_MEM_MAX){
+    /* Borrar el m\u00e1s viejo (primero en orden de inserci\u00f3n) */
+    const firstKey = TMDB_CACHE.keys().next().value;
+    if (firstKey !== undefined) TMDB_CACHE.delete(firstKey);
+  }
+}
+function _purgeSessionIfFull(){
+  /* Si sessionStorage est\u00e1 cerca del l\u00edmite (5MB t\u00edpico), borrar las entradas tmdb_ m\u00e1s viejas */
+  try {
+    let total = 0;
+    const tmdbKeys = [];
+    for (let i = 0; i < sessionStorage.length; i++){
+      const k = sessionStorage.key(i);
+      const v = sessionStorage.getItem(k);
+      total += (k.length + (v?.length || 0));
+      if (k && k.startsWith('tmdb_')){
+        try {
+          const c = JSON.parse(v);
+          tmdbKeys.push({ k, t: c?.t || 0 });
+        } catch{}
+      }
+    }
+    /* >4MB \u2192 purgar la mitad de entradas TMDB m\u00e1s viejas */
+    if (total > 4 * 1024 * 1024){
+      tmdbKeys.sort((a,b) => a.t - b.t);
+      const drop = Math.max(1, Math.floor(tmdbKeys.length / 2));
+      tmdbKeys.slice(0, drop).forEach(({k}) => { try { sessionStorage.removeItem(k); } catch{} });
+      console.log('[tmdb-cache] purged', drop, 'old entries');
+    }
+  } catch{}
+}
 
-/* v5.4.5: YTS mirrors fallback (VPN/DNS blocking) */
+/* v5.4.5: YTS bloqueado por VPNs (Proton NetShield, PiHole, etc.) + DNS de ISP.
+   Esta función prueba múltiples mirrors en orden hasta encontrar uno que responda.
+   En Electron además intenta vía IPC (main process tiene acceso de red sin restricciones). */
 const YTS_MIRRORS = [
-  'https://yts.mx', 'https://yts.rs', 'https://yts.lt',
-  'https://yts.am', 'https://yts.gd', 'https://yts-official.mx',
+  'https://yts.mx',
+  'https://yts.rs',
+  'https://yts.lt',
+  'https://yts.am',
+  'https://yts.gd',
+  'https://yts-official.mx',
 ];
 async function fetchYTS(pathQuery){
+  /* pathQuery debe empezar con /api/v2/... */
   let lastErr;
+  /* ① Probar mirrors directos */
   for (const base of YTS_MIRRORS){
     try {
       const ctrl = new AbortController();
@@ -586,27 +641,37 @@ async function fetchYTS(pathQuery){
       }
     } catch(e){ lastErr = e; }
   }
-  /* v5.4.6: CORS proxies para bypass DNS del ISP */
+  /* v5.4.6: ② Si todos los mirrors fallan por DNS (ISP bloquea), pasar por CORS proxies.
+     Los proxies resuelven el DNS en su servidor, no en tu PC → bypass del bloqueo. */
   for (const base of YTS_MIRRORS){
     const fullUrl = base + pathQuery;
-    for (const proxy of [
-      u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-      u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    ]){
-      try {
-        const ctrl = new AbortController();
-        const to = setTimeout(()=>ctrl.abort(), 10000);
-        const r = await fetch(proxy(fullUrl), { signal: ctrl.signal });
-        clearTimeout(to);
-        if (r.ok){
-          const data = await r.json();
-          if (data && data.status === 'ok') return data;
-        }
-      } catch(e){ lastErr = e; }
-    }
+    try {
+      const proxied = `https://corsproxy.io/?url=${encodeURIComponent(fullUrl)}`;
+      const ctrl = new AbortController();
+      const to = setTimeout(()=>ctrl.abort(), 10000);
+      const r = await fetch(proxied, { signal: ctrl.signal });
+      clearTimeout(to);
+      if (r.ok){
+        const data = await r.json();
+        if (data && data.status === 'ok') return data;
+      }
+    } catch(e){ lastErr = e; }
+    try {
+      const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(fullUrl)}`;
+      const ctrl = new AbortController();
+      const to = setTimeout(()=>ctrl.abort(), 10000);
+      const r = await fetch(proxied, { signal: ctrl.signal });
+      clearTimeout(to);
+      if (r.ok){
+        const data = await r.json();
+        if (data && data.status === 'ok') return data;
+      }
+    } catch(e){ lastErr = e; }
   }
+  /* ③ En Electron, fallback al main process (que puede no estar bajo el mismo bloqueo DNS) */
   if (window.nativeAPI && window.nativeAPI.searchTorrents){
     try {
+      /* extraer imdb_id o query del pathQuery */
       const imdbMatch = pathQuery.match(/imdb_id=([^&]+)/);
       const queryMatch = pathQuery.match(/query_term=([^&]+)/);
       const res = await window.nativeAPI.searchTorrents({
@@ -614,6 +679,7 @@ async function fetchYTS(pathQuery){
         title: queryMatch ? decodeURIComponent(queryMatch[1]) : null,
         type: 'movie',
       });
+      /* Adaptar al formato YTS esperado */
       if (res && res.length){
         return { status:'ok', data:{ movie:{ torrents: res.filter(x=>x.source==='YTS').map(x=>({
           quality: x.quality, size: x.size, seeds: x.seeds, peers: x.peers,
@@ -622,7 +688,7 @@ async function fetchYTS(pathQuery){
       }
     } catch(e){ lastErr = e; }
   }
-  throw lastErr || new Error('Todos los mirrors de YTS fallaron');
+  throw lastErr || new Error('Todos los mirrors de YTS fallaron (¿VPN/DNS bloqueando?)');
 }
 
 async function tmdbFetch(url, cacheMs=3600000){
@@ -630,14 +696,14 @@ async function tmdbFetch(url, cacheMs=3600000){
   /* En memoria primero */
   if (TMDB_CACHE.has(key)) {
     const c = TMDB_CACHE.get(key);
-    if (Date.now() - c.t < cacheMs) return c.d;
+    if (Date.now() - c.t < cacheMs) { _tmdbCacheTouch(key, c); return c.d; }
   }
   /* sessionStorage segundo */
   try {
     const raw = sessionStorage.getItem(key);
     if (raw){
       const c = JSON.parse(raw);
-      if (Date.now() - c.t < cacheMs) { TMDB_CACHE.set(key, c); return c.d; }
+      if (Date.now() - c.t < cacheMs) { _tmdbCacheTouch(key, c); return c.d; }
     }
   } catch{}
   /* Network */
@@ -645,8 +711,15 @@ async function tmdbFetch(url, cacheMs=3600000){
   if (!r.ok) throw new Error('TMDB '+r.status);
   const d = await r.json();
   const entry = {t:Date.now(), d};
-  TMDB_CACHE.set(key, entry);
-  try { sessionStorage.setItem(key, JSON.stringify(entry)); } catch{}
+  _tmdbCacheTouch(key, entry);
+  try { sessionStorage.setItem(key, JSON.stringify(entry)); }
+  catch(err){
+    /* v5.5.4: si sessionStorage est\u00e1 lleno, purgar y reintentar */
+    if (err.name === 'QuotaExceededError' || /quota/i.test(err.message||'')){
+      _purgeSessionIfFull();
+      try { sessionStorage.setItem(key, JSON.stringify(entry)); } catch{}
+    }
+  }
   return d;
 }
 
@@ -660,14 +733,17 @@ let _hls = null;
 let _cineproLoading = false;
 let _tmdbEmbedLoading = false;
 let _torrentLoading = false;
-/* v5.4.1: detección de Electron — desbloquea WebTorrent nativo (TCP+UDP+WebRTC) */
-const IS_ELECTRON = !!(window.nativeAPI && window.nativeAPI.isElectron);
+/* v5.4.1: detección de Electron — desbloquea WebTorrent nativo (TCP+UDP+WebRTC)
+   v5.5.3: defensive check \u2014 si preload.js fall\u00f3 al cargar (path corrupto en build),
+   nativeAPI no existe y window.nativeAPI.isElectron petar\u00eda. */
+const IS_ELECTRON = !!(typeof window !== 'undefined' && window.nativeAPI && window.nativeAPI.isElectron);
 
 /* ── v5.3.4 · TORRENTS automáticos via YTS API (CORS-friendly) + reproducción WebTorrent in-iframe ── */
 async function loadTorrentSources(){
   if (!S.tmdbId || S.type === 'r18') return;
   if (_torrentLoading) return;
   _torrentLoading = true;
+  const _token = S.openToken;
 
   const sec = $('srvSection');
   let trDiv = document.getElementById('torrentGroup');
@@ -713,6 +789,7 @@ async function loadTorrentSources(){
       const path = S.imdbId
         ? `/api/v2/movie_details.json?imdb_id=${S.imdbId}&with_cast=false`
         : `/api/v2/list_movies.json?query_term=${encodeURIComponent(S.title)}&limit=5`;
+      /* v5.4.5: usar fetchYTS con mirrors (evita bloqueo Proton VPN / DNS) */
       const data = await fetchYTS(path);
       const tr = [
         'wss://tracker.openwebtorrent.com',
@@ -733,6 +810,8 @@ async function loadTorrentSources(){
       }));
     }
 
+    /* v5.4.7: si el usuario cambió de título durante la búsqueda, descartar */
+    if (_token !== S.openToken){ if (trDiv && trDiv.parentNode) trDiv.remove(); return; }
     if (!torrents.length){
       trDiv.querySelector('.sbtns').innerHTML = '<span style="font-size:.72rem;color:var(--dim)">Sin torrents disponibles para este título.</span>';
       setTimeout(()=>{ if (trDiv && trDiv.parentNode) trDiv.style.display='none'; }, 4000);
@@ -784,12 +863,28 @@ async function playTorrent(magnet, btn){
 
   if (IS_ELECTRON) {
     /* v5.4.1: en Electron usamos el WebTorrent nativo (TCP/UDP/WebRTC completos) via IPC.
-       El backend levanta un servidor HTTP local con Range — alimenta el <video> directo. */
+       El backend levanta un servidor HTTP local con Range \u2014 alimenta el <video> directo.
+       v5.5.3: parar torrent anterior antes de empezar otro (antes \u2192 banda doble). */
+    if (window.nativeAPI?.stopTorrent){
+      try { await window.nativeAPI.stopTorrent(); } catch{}
+    }
     const f = $('vidFrame');
     if (f){ f.src = 'about:blank'; f.style.display = 'none'; }
     $('vidEmpty').style.display = 'flex';
     $('vidEmptyTxt').textContent = 'Obteniendo metadata del torrent…';
     toast('🧲 WebTorrent nativo (TCP+UDP) — esto es rápido', 'ok', 4500);
+    /* v5.5.0: mostrar progreso de metadata en tiempo real (peers + datos) durante la espera.
+       Antes el usuario veía "Obteniendo metadata…" estático aunque tardara 1 minuto.
+       v5.5.1: usar window._metaPolling para que playIframe/goHome puedan limpiarlo. */
+    if (window._metaPolling) clearInterval(window._metaPolling);
+    window._metaPolling = setInterval(async () => {
+      try {
+        const p = await window.nativeAPI.torrentProgress();
+        if (!p) return;
+        $('vidEmptyTxt').textContent = `📡 Conectando · ${p.peers} peer${p.peers!==1?'s':''} · ${p.down}`;
+      } catch{}
+    }, 1500);
+    setTimeout(()=>{ if (window._metaPolling) { clearInterval(window._metaPolling); window._metaPolling = null; } }, 130000);
     try {
       const result = await window.nativeAPI.streamTorrent(magnet);
       if (!result || !result.url) throw new Error('Sin URL');
@@ -800,6 +895,13 @@ async function playTorrent(magnet, btn){
       $('vidEmpty').style.display = 'none';
       if (btn._dot) btn._dot.className = 'srv-dot ok';
       toast(`▶ Reproduciendo · ${result.name || 'torrent'} · ${result.size||''}`, 'ok');
+      /* v5.5.0: si el video no se reproduce tras 10s, dar diagnóstico claro */
+      setTimeout(() => {
+        if (cineV.readyState < 2 && cineV.src === result.url){
+          dbgLog(`⚠ Video no inició tras 10s · readyState=${cineV.readyState}`);
+          toast('⏳ El video tarda en arrancar — peers lentos o codec no soportado. Mira consola (F12).', '', 6000);
+        }
+      }, 10000);
       /* Estadísticas periódicas */
       if (window._torrentStatsTimer) clearInterval(window._torrentStatsTimer);
       window._torrentStatsTimer = setInterval(async () => {
@@ -817,6 +919,17 @@ async function playTorrent(magnet, btn){
       toast('Error torrent: ' + (e.message||'falló'), 'err', 5000);
       if (btn._dot) btn._dot.className = 'srv-dot fail';
       console.error('[playTorrent native]', e);
+      /* v5.5.0: limpiar polling de metadata si todavía está activo */
+      if (window._metaPolling){ clearInterval(window._metaPolling); window._metaPolling = null; }
+      /* Mensaje útil según tipo de error */
+      const msg = (e.message||'').toLowerCase();
+      if (msg.includes('timeout')){
+        $('vidEmptyTxt').innerHTML = '⏱ Timeout · El torrent tardó >2min en encontrar peers.<br><span style="font-size:.7rem">Prueba otro torrent con más seeders.</span>';
+      } else if (msg.includes('webtorrent no disponible')){
+        $('vidEmptyTxt').innerHTML = '❌ Módulo WebTorrent no cargó.<br><span style="font-size:.7rem">Reinstala la app o recompila.</span>';
+      } else {
+        $('vidEmptyTxt').innerHTML = `❌ ${e.message||'error desconocido'}`;
+      }
     }
     return;
   }
@@ -835,6 +948,7 @@ async function loadTmdbEmbedSources(){
   if (!S.tmdbId || S.type === 'r18') return;
   if (_tmdbEmbedLoading) return;
   _tmdbEmbedLoading = true;
+  const _token = S.openToken;
   const sec = $('srvSection');
   let teDiv = document.getElementById('tmdbEmbedGroup');
   if (teDiv) teDiv.remove();
@@ -854,6 +968,8 @@ async function loadTmdbEmbedSources(){
     clearTimeout(to);
     if (!r.ok) throw new Error('HTTP '+r.status);
     const data = await r.json();
+    /* v5.4.7: si el usuario cambió de título mientras esperabamos, descartar resultado */
+    if (_token !== S.openToken){ if (teDiv && teDiv.parentNode) teDiv.remove(); return; }
     const streams = data.streams || [];
     if (!streams.length){
       teDiv.querySelector('.sbtns').innerHTML = '<span style="font-size:.72rem;color:var(--dim)">Sin fuentes en TMDB-Embed para este título.</span>';
@@ -873,6 +989,7 @@ async function loadCineProSources(){
   if (!S.tmdbId || S.type === 'r18') return;
   if (_cineproLoading) return;
   _cineproLoading = true;
+  const _token = S.openToken;
   /* Inserta un grupo "CinePro" al principio del srvSection mientras carga */
   const sec = $('srvSection');
   let cpDiv = document.getElementById('cineproGroup');
@@ -894,6 +1011,8 @@ async function loadCineProSources(){
     clearTimeout(to);
     if (!r.ok) throw new Error('HTTP '+r.status);
     const data = await r.json();
+    /* v5.4.7: si el usuario cambió de título, descartar */
+    if (_token !== S.openToken){ if (cpDiv && cpDiv.parentNode) cpDiv.remove(); return; }
     /* CinePro a veces devuelve URLs apuntando a localhost:10000 (puerto interno del contenedor).
        Las reescribimos al dominio público real. */
     const dataStr = JSON.stringify(data).replace(/https?:\/\/localhost:\d+/g, CINEPRO_URL).replace(/https?:\/\/127\.0\.0\.1:\d+/g, CINEPRO_URL);
@@ -908,11 +1027,25 @@ async function loadCineProSources(){
 }
 
 function renderCineProSources(data, cpDiv){
+  /* v5.5.5: validar que cpDiv y su .sbtns existen antes de tocar (puede haber sido removido
+     durante el await de fetch si el usuario cambi\u00f3 de t\u00edtulo). */
+  if (!cpDiv || !cpDiv.parentNode) return;
+  const sbtnsEl = cpDiv.querySelector('.sbtns');
+  if (!sbtnsEl) return;
   /* CinePro v1 devuelve { sources: [{provider, type, url, quality, language|lang, subtitles?}] }
-     o { results: [...] } — manejamos ambos */
-  const sources = data.sources || data.results || data.streams || [];
+     o { results: [...] } \u2014 manejamos ambos */
+  let sources = data.sources || data.results || data.streams || [];
+  /* v5.5.8: deduplicar por URL \u2014 algunos providers responden la misma URL 5 veces.
+     Antes apareci\u00edan 5 botones id\u00e9nticos "02MovieDownloader 720". */
+  const seenUrls = new Set();
+  sources = sources.filter(s => {
+    const u = (s.url || s.stream || s.file || s.link || '').trim();
+    if (!u || seenUrls.has(u)) return false;
+    seenUrls.add(u);
+    return true;
+  });
   if (!sources.length){
-    cpDiv.querySelector('.sbtns').innerHTML = '<span style="font-size:.72rem;color:var(--dim)">CinePro sin fuentes para este título. Usando servidores embed.</span>';
+    sbtnsEl.innerHTML = '<span style="font-size:.72rem;color:var(--dim)">CinePro sin fuentes para este t\u00edtulo. Usando servidores embed.</span>';
     return;
   }
   /* Prioridad de idioma: latino > castellano > dual > sub-es > eng */
@@ -1090,23 +1223,44 @@ function playHls(url, src){
       } catch{}
     });
     _hls.on(Hls.Events.ERROR, (_e, d)=>{
-      if (d.fatal){
-        console.warn('[HLS fatal]', d, 'url:', finalUrl);
-        markBroken(url); /* añadir a lista de muertos */
-        /* Probar URL sin proxy como fallback */
-        if (finalUrl !== url){
-          try { _hls.destroy(); } catch{}
-          _hls = new Hls({ maxBufferLength: 30 });
-          _hls.loadSource(url);
-          _hls.attachMedia(v);
-          _hls.on(Hls.Events.MANIFEST_PARSED, ()=>v.play().catch(()=>{}));
-          _hls.on(Hls.Events.ERROR, (_e2, d2)=>{
-            if (d2.fatal) toast('Esta fuente no se puede reproducir — prueba otra', 'err');
-          });
-          return;
+      /* v5.5.6: manejo COMPLETO de errores HLS \u2014 antes solo se actuaba en fatales
+         y se ignoraban errores recuperables como BUFFER_STALLED o FRAG_LOAD_ERROR. */
+      if (!d.fatal){
+        /* No fatales: log + dejar que hls.js recupere autom\u00e1ticamente */
+        if (d.details === 'bufferStalledError'){
+          console.warn('[HLS] buffer stalled, hls.js intentar\u00e1 recuperar');
         }
-        toast('Esta fuente no se puede reproducir — prueba otra', 'err');
+        return;
       }
+      console.warn('[HLS fatal]', d.type, d.details, 'url:', finalUrl);
+      /* Intentar recovery seg\u00fan tipo de error fatal antes de tirar la toalla */
+      if (d.type === Hls.ErrorTypes.MEDIA_ERROR){
+        try { _hls.recoverMediaError(); toast('Recuperando reproductor\u2026','',2500); return; } catch{}
+      }
+      if (d.type === Hls.ErrorTypes.NETWORK_ERROR && d.details !== 'manifestLoadError'){
+        try { _hls.startLoad(); toast('Reintentando carga\u2026','',2500); return; } catch{}
+      }
+      /* Si no se pudo recuperar \u2192 marcar como muerto y probar fallback */
+      markBroken(url);
+      if (finalUrl !== url){
+        try { _hls.destroy(); } catch{}
+        _hls = new Hls({ maxBufferLength: 30, enableWorker: true });
+        _hls.loadSource(url);
+        _hls.attachMedia(v);
+        _hls.on(Hls.Events.MANIFEST_PARSED, ()=>v.play().catch(()=>{}));
+        _hls.on(Hls.Events.ERROR, (_e2, d2)=>{
+          if (d2.fatal){
+            /* v5.5.6: destroy el HLS fallido para no fugar memoria */
+            try { _hls.destroy(); } catch{}
+            _hls = null;
+            toast('Esta fuente no se puede reproducir \u2014 prueba otra', 'err');
+          }
+        });
+        return;
+      }
+      try { _hls.destroy(); } catch{}
+      _hls = null;
+      toast('Esta fuente no se puede reproducir \u2014 prueba otra', 'err');
     });
   } else if (v.canPlayType('application/vnd.apple.mpegurl')){
     v.src = finalUrl; v.play().catch(()=>{});
@@ -1122,14 +1276,32 @@ function playMp4(url){
   const v = $('cineVideo');
   v.style.display = 'block';
   if (_hls){ try{_hls.destroy();}catch{} _hls = null; }
-  /* Fallback automático a iframe si el browser no reconoce el formato MIME */
+  /* v5.5.6: limpiar handlers previos antes de re-asignar */
+  v.onerror = null; v.oncanplay = null;
+  /* Fallback autom\u00e1tico a iframe si el browser no reconoce el formato MIME */
   v._fallbackUrl = url;
-  v.onerror = (e)=>{
+  /* v5.5.8: HEAD-check para detectar p\u00e1ginas HTML (fzmovies, downloaders) servidas
+     como si fueran video \u2014 antes el <video> intentaba reproducir HTML y quedaba colgado. */
+  fetch(url, { method:'HEAD', mode:'cors' }).then(r => {
+    const ct = (r.headers.get('content-type')||'').toLowerCase();
+    if (ct.includes('text/html') || ct.includes('application/xhtml')){
+      console.warn('[playMp4] URL devuelve HTML, no video:', url, ct);
+      toast('Esta fuente devuelve una p\u00e1gina, no video \u2014 marcando como rota', 'err', 4500);
+      markBroken(url);
+      v.style.display = 'none';
+      /* Si la URL parece p\u00e1gina de descarga (no embed), mostrar en iframe como fallback */
+      playIframe(url);
+    }
+  }).catch(()=>{ /* CORS bloqueo o red \u2014 dejar que <video> intente igual */ });
+  v.onerror = ()=>{
     console.warn('[playMp4] formato no soportado, fallback a iframe:', url);
-    toast('Formato no compatible — abriendo en iframe','err',2500);
+    toast('Formato no compatible \u2014 abriendo en iframe','err',2500);
     v.onerror = null;
     playIframe(url);
   };
+  /* v5.5.6: quitar onerror cuando el video arranca bien para no disparar fallback
+     en errores transitorios (red bumps durante streaming). */
+  v.oncanplay = () => { v.onerror = null; v.oncanplay = null; };
   v.src = url; v.play().catch(()=>{});
 }
 const PROXIES = [
@@ -1246,7 +1418,7 @@ const STD = [
     t:(id,s,e)=>`https://moviee.tv/embed/${id}/${s}/${e}` },
 ];
 
-let S = { type:'movie', isSeries:false, tmdbId:null, imdbId:null, title:'', poster:null, curS:1, curE:1, seasons:{}, reqId:0, genre:null, r18cat:null, r18mode:'std', year:null };
+let S = { type:'movie', isSeries:false, tmdbId:null, imdbId:null, title:'', poster:null, curS:1, curE:1, seasons:{}, reqId:0, genre:null, r18cat:null, r18mode:'std', year:null, openToken:0, seasonToken:0 };
 
 const GENRES_MOVIE = [[28,'Acción'],[12,'Aventura'],[16,'Animación'],[35,'Comedia'],[80,'Crimen'],[18,'Drama'],[14,'Fantasía'],[27,'Terror'],[9648,'Misterio'],[10749,'Romance'],[878,'Ciencia ficción'],[53,'Thriller'],[10752,'Bélica'],[37,'Western']];
 const GENRES_TV = [[10759,'Acción/Aventura'],[16,'Animación'],[35,'Comedia'],[80,'Crimen'],[18,'Drama'],[10751,'Familia'],[10765,'Sci-Fi/Fantasía'],[9648,'Misterio'],[10764,'Reality'],[10768,'Bélico'],[37,'Western']];
@@ -1273,11 +1445,32 @@ const R18_CATS = [
 ];
 
 function renderGenres(){
-  const c = $('gchips'); c.innerHTML = '';
+  /* v5.5.2: si ya hay chips renderizados y el TIPO no cambió, solo togglear .on
+     en los existentes en vez de recrear 30 nodos. Performance + preserva foco. */
+  const c = $('gchips');
+  const sameType = c.dataset.type === S.type;
+  if (sameType && c.children.length && S.type !== 'r18'){
+    const curGenre = S.genre == null ? 'all' : String(S.genre);
+    [...c.children].forEach(el => {
+      if (el.classList.contains('gchip')){
+        const id = el.dataset.gid || 'all';
+        el.classList.toggle('on', id === curGenre);
+      }
+    });
+    /* refrescar year chip (estado puede cambiar) */
+    const yc = c.querySelector('#yearChip');
+    if (yc){
+      yc.textContent = (S.year ? String(S.year) : 'A\u00f1o') + (S.year ? ' \u2715' : '');
+      yc.classList.toggle('on', !!S.year);
+    }
+    return;
+  }
+  c.dataset.type = S.type;
+  c.innerHTML = '';
   let list;
   if (S.type === 'r18'){
-    /* Toggle de modo: Estándar (eporner directo) vs Premium (multi-query · HD · alta calidad) */
-    const modes = [['std','Estándar'],['premium','Premium HD']];
+    /* Toggle de modo: Est\u00e1ndar (eporner directo) vs Premium (multi-query \u00b7 HD \u00b7 alta calidad) */
+    const modes = [['std','Est\u00e1ndar'],['premium','Premium HD']];
     modes.forEach(([k,lbl])=>{
       const b = document.createElement('button'); b.className = 'gchip'+(S.r18mode===k?' on':'');
       b.textContent = lbl;
@@ -1299,18 +1492,29 @@ function renderGenres(){
     return;
   }
   list = S.type==='tv' ? GENRES_TV : S.type==='anime' ? GENRES_ANIME : GENRES_MOVIE;
-  const all = document.createElement('button'); all.className = 'gchip'+(!S.genre?' on':''); all.textContent='Todo';
+  const all = document.createElement('button');
+  all.className = 'gchip'+(!S.genre?' on':'');
+  all.textContent='Todo';
+  all.dataset.gid = 'all';
   all.onclick = ()=>{ S.genre = null; renderGenres(); filterChange(); };
   c.appendChild(all);
   list.forEach(([id,nm])=>{
-    const b = document.createElement('button'); b.className='gchip'+(S.genre===id?' on':'');
-    b.textContent = nm; b.onclick = ()=>{ S.genre = id; renderGenres(); filterChange(); };
+    const b = document.createElement('button');
+    b.className='gchip'+(S.genre===id?' on':'');
+    b.dataset.gid = String(id);
+    b.textContent = nm;
+    b.onclick = ()=>{ S.genre = id; renderGenres(); filterChange(); };
     c.appendChild(b);
   });
   c.appendChild(renderYearChip());
 }
 
 function renderYearChip(){
+  /* v5.5.1: limpiar listener previo si existi\u00f3 \u2014 antes se acumulaban */
+  if (window._yearOutsideHandler){
+    document.removeEventListener('click', window._yearOutsideHandler);
+    window._yearOutsideHandler = null;
+  }
   const wrap = document.createElement('span');
   wrap.style.cssText = 'position:relative;display:inline-flex;align-items:center;margin-left:8px';
   const cur = S.year ? String(S.year) : 'Año';
@@ -1336,12 +1540,18 @@ function renderYearChip(){
       panel.style.display = panel.style.display==='block' ? 'none' : 'block';
     };
     if (slide) slide.oninput = ()=>val.textContent = slide.value;
-    /* v5.3.3: handler permanente (no {once:true} — si clickas dentro del panel se eliminaba y el panel no se cerraba más) */
+    /* v5.5.1: pre-clean al inicio de renderYearChip + register global handler. La MutationObserver
+       solo desconectaba post-mortem (cuando ya quedaban listeners zombies). Ahora preventivo. */
     const closeOnOutside = (e)=>{
-      if(!wrap.isConnected){ document.removeEventListener('click', closeOnOutside); return; }
+      if(!wrap.isConnected){
+        document.removeEventListener('click', closeOnOutside);
+        if (window._yearOutsideHandler === closeOnOutside) window._yearOutsideHandler = null;
+        return;
+      }
       if(!wrap.contains(e.target)) panel.style.display='none';
     };
     document.addEventListener('click', closeOnOutside);
+    window._yearOutsideHandler = closeOnOutside;
   });
   return wrap;
 }
@@ -1349,7 +1559,10 @@ function setYear(y){ S.year = y; renderGenres(); filterChange(); }
 function applyYear(){ const s=document.getElementById('yearSlide'); if(s) setYear(+s.value); }
 
 /* Cambiar filtro sin perder reproducción: si el player está abierto,
-   movemos el video al miniplayer y mostramos la home con el filtro nuevo */
+   movemos el video al miniplayer y mostramos la home con el filtro nuevo.
+   v5.5.1: + debounce — si el usuario clickea rápido en múltiples chips de género,
+   antes se disparaban 5 fetches a TMDB en paralelo (solo el último importa). */
+let _filterChangeT = null;
 function filterChange(){
   const playerOpen = $('player').classList.contains('on');
   /* v5.3.2: chequear que el iframe tenga URL real (no about:blank tras goHome) */
@@ -1361,7 +1574,8 @@ function filterChange(){
     $('trendSec').style.display = '';
     if (!$('videoWrap').classList.contains('mini')) openMini();
   }
-  loadTrending();
+  if (_filterChangeT) clearTimeout(_filterChangeT);
+  _filterChangeT = setTimeout(()=>{ _filterChangeT = null; loadTrending(); }, 150);
 }
 
 /* ── THEME ── */
@@ -1383,7 +1597,11 @@ function initTheme(){
 function setAdblock(on){ try { localStorage.setItem('nc_adblock', JSON.stringify(!!on)); } catch{}; toast(on?'Ad-block activado':'Ad-block desactivado'); }
 
 /* ── PWA ── */
-if ('serviceWorker' in navigator){
+/* v5.5.0: NO registrar SW en file:// (Electron) ni en sandbox del preview de Claude.
+   Antes daba error silencioso "The script has an unsupported MIME type" o "DOMException".
+   Sólo se intenta en http(s) reales. */
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)
+    && !/claudeusercontent\.com/.test(location.hostname)){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
 
@@ -1395,6 +1613,22 @@ document.addEventListener('error', e=>{
     t.src = imgUrl(null);
   }
 }, true);
+
+/* v5.5.1: error boundary global \u2014 capturar errores JS invisibles y mostrarlos como toast
+   (para web puro; en .exe ya hay el banner rojo inyectado desde electron-main.js).
+   Solo se muestra al usuario si parece error real, ignorando rejects esperados (fetch fail). */
+window.addEventListener('error', e => {
+  const m = e.message || (e.error && e.error.message) || '';
+  /* Ignorar errores de scripts externos / CORS / extensiones */
+  if (!m || /Script error|ResizeObserver/.test(m)) return;
+  console.error('[nc:error]', m, e.filename, e.lineno);
+  /* No molestar al usuario en produccion: solo log a consola visible */
+});
+window.addEventListener('unhandledrejection', e => {
+  const r = e.reason; const m = r && (r.message||String(r)) || '';
+  if (!m || /Failed to fetch|NetworkError|AbortError|Load failed/i.test(m)) return;
+  console.warn('[nc:reject]', m);
+});
 
 /* ── PROGRESS POSTMESSAGE ── */
 window.addEventListener('message', e=>{
@@ -1416,14 +1650,50 @@ window.addEventListener('message', e=>{
   }
   // Videasy episode change
   if (d.type === 'episodeChange' && d.season && d.episode){
-    S.curS = +d.season; S.curE = +d.episode;
-    document.querySelectorAll('.ep').forEach(b=>b.classList.toggle('on', b.textContent==='E'+S.curE));
+    const newS = +d.season, newE = +d.episode;
+    if (Number.isFinite(newS) && Number.isFinite(newE) && (newS !== S.curS || newE !== S.curE)){
+      const prevS = S.curS, prevE = S.curE;
+      S.curS = newS; S.curE = newE;
+      document.querySelectorAll('.ep').forEach(b=>b.classList.toggle('on', b.textContent==='E'+S.curE));
+      /* v5.5.5: si el usuario navega episodios dentro del iframe (Videasy lo soporta),
+         actualizar tambi\u00e9n el seaSel + episodios visibles. */
+      const seasel = $('seaSel');
+      if (seasel && seasel.value !== String(newS)){
+        if (S.seasons[newS]){
+          seasel.value = String(newS);
+        } else {
+          /* v5.5.7: cargar la temporada nueva si a\u00fan no est\u00e1 en cach\u00e9 */
+          seasel.value = String(newS);
+          loadSeason(newS);
+        }
+      }
+      saveCW(1); /* marcar que estamos viendo */
+    }
   }
 });
 const $ = id => document.getElementById(id);
 const STORE = {
   get(k,d){ try{ const v=localStorage.getItem('nc_'+k); return v?JSON.parse(v):d }catch{ return d } },
-  set(k,v){ try{ localStorage.setItem('nc_'+k,JSON.stringify(v)) }catch{} },
+  set(k,v){
+    try{ localStorage.setItem('nc_'+k,JSON.stringify(v)) }
+    catch(err){
+      /* v5.5.4: si localStorage est\u00e1 lleno, purgar entradas grandes y reintentar.
+         Sin esto el usuario perd\u00eda favs/historial silenciosamente al llegar al l\u00edmite. */
+      if (err.name === 'QuotaExceededError' || /quota/i.test(err.message||'')){
+        try {
+          /* Estrategia: purgar broken_sources y working_sources (los m\u00e1s grandes y menos cr\u00edticos) */
+          localStorage.removeItem('nc_broken_sources');
+          localStorage.removeItem('nc_working_sources');
+          /* Reintentar */
+          localStorage.setItem('nc_'+k, JSON.stringify(v));
+          toast('Almacenamiento lleno: liberado espacio (cache servers)','ok',4500);
+        } catch(e2){
+          toast('Almacenamiento al l\u00edmite \u2014 exporta tus datos','err',6000);
+          console.error('[STORE] quota:', e2);
+        }
+      }
+    }
+  },
 };
 const SES = {
   get(k,d){ try{ const v=sessionStorage.getItem('nc_'+k); return v?JSON.parse(v):d }catch{ return d } },
@@ -1458,6 +1728,12 @@ async function loadTrending(){
   const grid = $('trendGrid');
   const lbl = $('trendLbl');
   grid.innerHTML = '<div class="state"><div class="spinner"></div><p>Cargando recomendaciones…</p></div>';
+
+  /* v5.5.5: AbortController \u2014 si el usuario cambia de filtro/tab rapido,
+     cancelar fetches previos para evitar parpadeo de resultados desordenados. */
+  if (window._trendingAbort){ try { window._trendingAbort.abort(); } catch{} }
+  window._trendingAbort = new AbortController();
+  const _myAbort = window._trendingAbort;
 
   if (S.type === 'r18'){
     const idx = S.r18cat == null ? 0 : S.r18cat;
@@ -1539,7 +1815,21 @@ function makeCard(m){
       <div class="card-meta"><span class="yr">${yr}</span>${rt}</div>
     </div>`;
   c.onclick = ()=>openContent(m);
-  c.ondblclick = (e)=>{ e.stopPropagation(); if(S.tmdbId===m.id){ const f=$('vidFrame'); if(f&&f.requestFullscreen) f.requestFullscreen().catch(()=>{}); return; } setTimeout(()=>{ const f=$('vidFrame'); if(f && f.requestFullscreen) f.requestFullscreen().catch(()=>{}); }, 2200); };
+  /* v5.4.7 bugfix: dedupe del timer de fullscreen para evitar dobles fullscreens si el usuario hace dblclick a varias cards */
+  c.ondblclick = (e)=>{
+    e.stopPropagation();
+    if(S.tmdbId===m.id){
+      const f=$('vidFrame'); if(f&&f.requestFullscreen) f.requestFullscreen().catch(()=>{});
+      return;
+    }
+    openContent(m);
+    if (window._fsTimer) clearTimeout(window._fsTimer);
+    window._fsTimer = setTimeout(()=>{
+      window._fsTimer = null;
+      const f=$('vidFrame');
+      if(f && f.requestFullscreen) f.requestFullscreen().catch(()=>{});
+    }, 2200);
+  };
   return c;
 }
 
@@ -1558,10 +1848,16 @@ function makeR18Card(it){
 }
 
 async function eporneSearch(query='', order='top-weekly'){
-  /* Si hay filtro de año, lo añadimos al query */
+  /* Si hay filtro de a\u00f1o, lo a\u00f1adimos al query */
   const yr = (typeof S !== 'undefined' && S.year) ? ' '+S.year : '';
-  /* Patrones español ampliados (v5.1.1): latino, castellano, dual, sub */
-  const langKeyword = (typeof S !== 'undefined' && S._r18lang) ? ' '+S._r18lang : '';
+  /* v5.5.4: r18 language keyword \u2014 inferir del modo Premium + cat\u00e1logo seleccionado.
+     Antes S._r18lang nunca se seteaba (c\u00f3digo muerto). */
+  let langKeyword = '';
+  if (typeof S !== 'undefined' && S.type === 'r18' && S.r18cat != null){
+    const cat = R18_CATS[S.r18cat];
+    /* Si la categor\u00eda incluye 'espa\u00f1ol' o 'latina', sesgar el query */
+    if (cat && /espa\u00f1ol|latina/i.test(cat[2])) langKeyword = ' spanish';
+  }
   const fullQuery = (query+yr+langKeyword).trim();
   const url = `https://www.eporner.com/api/v2/video/search/?query=${encodeURIComponent(fullQuery)}&per_page=30&page=1&thumbsize=medium&order=${order}&format=json`;
   let data;
@@ -1599,10 +1895,15 @@ $('si').addEventListener('keydown', e=>{
 
 async function liveSearch(q){
   const reqId = ++S.reqId;
+  /* v5.5.3: AbortController \u2014 cancelar fetches previos cuando el usuario sigue tecleando. */
+  if (window._liveSearchAbort){
+    try { window._liveSearchAbort.abort(); } catch{}
+  }
+  const abort = window._liveSearchAbort = new AbortController();
   if (S.type === 'r18'){
     try {
       const items = await eporneSearch(q, 'most-popular');
-      if (reqId !== S.reqId) return;
+      if (reqId !== S.reqId) return;  /* v5.5.1: descartar respuesta tardía */
       const dd = $('dd'); dd.innerHTML = '';
       items.slice(0,8).forEach(it=>{
         const div = document.createElement('div'); div.className = 'ddi';
@@ -1618,7 +1919,7 @@ async function liveSearch(q){
   }
   try {
     const ep = S.isSeries ? 'tv' : 'movie';
-    const r = await fetch(`https://api.themoviedb.org/3/search/${ep}?api_key=${KEY}&language=es-MX&query=${encodeURIComponent(q)}&include_adult=false`);
+    const r = await fetch(`https://api.themoviedb.org/3/search/${ep}?api_key=${KEY}&language=es-MX&query=${encodeURIComponent(q)}&include_adult=false`, { signal: abort.signal });
     const data = await r.json();
     if (reqId !== S.reqId) return;
     const dd = $('dd'); dd.innerHTML = '';
@@ -1644,28 +1945,34 @@ async function doSearch(){
     return;
   }
   $('dd').classList.remove('open');
+  /* v5.5.7: AbortController \u2014 cancelar liveSearch en vuelo + esta b\u00fasqueda si el usuario reabre rapido */
+  if (window._liveSearchAbort){ try { window._liveSearchAbort.abort(); } catch{} }
+  if (window._doSearchAbort){ try { window._doSearchAbort.abort(); } catch{} }
+  const abort = window._doSearchAbort = new AbortController();
   if (S.type === 'r18'){
     const grid = $('trendGrid'); $('trendLbl').textContent = `Buscando: ${q}`;
     $('player').classList.remove('on'); $('trendSec').style.display='';
-    grid.innerHTML = '<div class="state"><div class="spinner"></div><p>Buscando…</p></div>';
+    grid.innerHTML = '<div class="state"><div class="spinner"></div><p>Buscando\u2026</p></div>';
     try {
       const items = await eporneSearch(q, 'most-popular');
-      if (!items.length) throw new Error('vacío');
+      if (!items.length) throw new Error('vac\u00edo');
       grid.innerHTML = '';
       items.forEach(it=>grid.appendChild(makeR18Card(it)));
     } catch(e){
-      grid.innerHTML = '<div class="state"><p>Búsqueda adulto falló. Reintenta o usa otro término.</p></div>';
+      grid.innerHTML = '<div class="state"><p>B\u00fasqueda adulto fall\u00f3. Reintenta o usa otro t\u00e9rmino.</p></div>';
     }
     return;
   }
   try {
     const ep = S.isSeries ? 'tv' : 'movie';
-    const r = await fetch(`https://api.themoviedb.org/3/search/${ep}?api_key=${KEY}&language=es-MX&query=${encodeURIComponent(q)}`);
+    const r = await fetch(`https://api.themoviedb.org/3/search/${ep}?api_key=${KEY}&language=es-MX&query=${encodeURIComponent(q)}`, { signal: abort.signal });
     const data = await r.json();
     const items = data.results || [];
     if (!items.length){ toast(`Sin resultados para "${q}"`, 'err'); return; }
     openContent(items[0]);
-  } catch{ toast('Error en búsqueda', 'err'); }
+  } catch(e){
+    if (e.name !== 'AbortError') toast('Error en b\u00fasqueda', 'err');
+  }
 }
 
 /* ── OPEN CONTENT ── */
@@ -1724,6 +2031,10 @@ async function openContent(item, opts){
   if (typeof _cineproLoading !== 'undefined') _cineproLoading = false;
   if (typeof _tmdbEmbedLoading !== 'undefined') _tmdbEmbedLoading = false;
   if (typeof _torrentLoading !== 'undefined') _torrentLoading = false;
+  /* v5.4.7: token de generación — si el usuario abre otro título, loaders en vuelo descartan su resultado */
+  S.openToken = (S.openToken || 0) + 1;
+  const _myToken = S.openToken;
+  S._myToken = _myToken;
   window.scrollTo({top:0, behavior:'smooth'});
 
   const ep = S.isSeries ? 'tv' : 'movie';
@@ -1739,8 +2050,10 @@ async function openContent(item, opts){
   /* BC-02 fix: preservar episodio cuando viene de Continuar Viendo */
   if (opts.keepEpisode && opts.curS && opts.curE) {
     S.curS = opts.curS; S.curE = opts.curE;
+    S._initialSeason = true; /* v5.4.7: marcar para que loadSeason no resetee curE */
   } else {
     S.curS = 1; S.curE = 1;
+    S._initialSeason = false;
   }
   S.seasons = {};
   S._altTitle = null; /* limpiar título alternativo al abrir nuevo contenido */
@@ -1758,17 +2071,22 @@ async function openContent(item, opts){
   if (S.imdbId) tags.push(`<span class="tag t-b">IMDB</span>`);
   $('ptags').innerHTML = tags.join('');
   /* R18 cross-search */
+  const _xxxOpenToken = S.openToken;
   setTimeout(async ()=>{
+    /* v5.5.5: si el usuario cambi\u00f3 de contenido durante los 800ms de espera, abortar */
+    if (_xxxOpenToken !== S.openToken) return;
     try {
       /* Remove any previous cross-search section to avoid duplicates */
       const oldXxx = document.getElementById('xxxBox'); if (oldXxx) oldXxx.remove();
       const xxx = await eporneSearch(S.title, 'most-popular');
+      /* v5.5.5: re-check despu\u00e9s del await */
+      if (_xxxOpenToken !== S.openToken) return;
       if (!xxx.length) return;
       const sec = $('srvSection');
       const div = document.createElement('div');
       div.id = 'xxxBox';
       div.style.marginTop = '18px';
-      div.innerHTML = `<div class="section-label">Versión adulto / parodia (${xxx.length})</div><div id="xxxRel" class="grid"></div>`;
+      div.innerHTML = `<div class="section-label">Versi\u00f3n adulto / parodia (${xxx.length})</div><div id="xxxRel" class="grid"></div>`;
       sec.appendChild(div);
       const g = div.querySelector('#xxxRel');
       xxx.slice(0,8).forEach(v=>g.appendChild(makeR18Card(v)));
@@ -1816,12 +2134,20 @@ async function openContent(item, opts){
 }
 
 async function loadSeason(n){
+  /* v5.4.7 bugfix: lógica clara con flag explícito.
+     v5.5.1: + token de generación para descartar fetches obsoletos cuando el usuario
+     cambia de temporada rápido o abre otro contenido a media carga. */
+  const isInitial = S._initialSeason === true;
+  S._initialSeason = false;
   S.curS = n;
-  /* BC-02: si veniamos de continuar viendo a una temporada específica, no resetear curE */
-  if (!Object.keys(S.seasons).length) {} else { S.curE = 1; }
+  if (!isInitial) S.curE = 1;
+  const _seaToken = ++S.seasonToken;
+  const _openTokenStart = S.openToken;
   const epg = $('epg'); epg.innerHTML = '<div class="state" style="grid-column:1/-1;padding:14px"><div class="spinner"></div></div>';
   try {
     const data = await tmdbFetch(`https://api.themoviedb.org/3/tv/${S.tmdbId}/season/${n}?api_key=${KEY}&language=es-MX`);
+    /* v5.5.1: descartar si el usuario cambió de temporada o de contenido mientras esperabamos */
+    if (_seaToken !== S.seasonToken || _openTokenStart !== S.openToken) return;
     const eps = data?.episodes || [];
     S.seasons[n] = eps;
     epg.innerHTML = '';
@@ -1867,6 +2193,9 @@ function getServerGroups(){
   ];
 }
 
+/* v5.5.5: NOTE \u2014 esta funci\u00f3n se sobrescribe m\u00e1s abajo (l\u00ednea ~3037) por una versi\u00f3n
+   con filtros/scoring (filterSrvs + srvScore + renderFilters). La sobrescritura es intencional:
+   esta es el "fallback" si los m\u00f3dulos de filtros no se cargan. NO es c\u00f3digo muerto. */
 function renderServers(){
   const sec = $('srvSection');
   /* v5.3.2 fix: preservar grupos dinámicos (CinePro / TMDB-Embed) que cargan async
@@ -1918,13 +2247,32 @@ function playServer(s, btn){
 }
 
 function playIframe(url){
-  /* Si hay video nativo reproduciéndose, detenerlo */
+  /* v5.5.3: validar protocolo \u2014 algunos providers maliciosos podr\u00edan devolver
+     javascript:/data:/file: URLs. Solo permitir http(s). */
+  const safe = typeof url === 'string' && /^https?:\/\//i.test(url);
+  if (!safe){
+    console.warn('[playIframe] URL bloqueada por protocolo no permitido:', url);
+    toast('URL del servidor no v\u00e1lida','err');
+    return;
+  }
+  /* v5.5.8: detectar dominios de p\u00e1ginas de descarga conocidas que NO son embeds reales
+     (fzmovies, donwload-pages, etc.). Marcar como rotas. */
+  const KNOWN_BROKEN_DOMAINS = /fzmovies\.|02moviedownload|downloadhub|filepursuit|cyou\/res\//i;
+  if (KNOWN_BROKEN_DOMAINS.test(url)){
+    console.warn('[playIframe] dominio conocido como p\u00e1gina de descarga, no embed:', url);
+    toast('Esta fuente es una p\u00e1gina de descarga, no un embed \u2014 prueba otra','err',5000);
+    markBroken(url);
+    return;
+  }
+  /* Si hay video nativo reproduci\u00e9ndose, detenerlo */
   const v = $('cineVideo');
   if (v && v.style.display !== 'none'){ try { v.pause(); v.removeAttribute('src'); v.load(); } catch{} v.style.display = 'none'; }
   if (_hls){ try { _hls.destroy(); } catch{} _hls = null; }
   /* v5.4.1: parar torrent nativo si estaba en marcha */
   if (IS_ELECTRON && window.nativeAPI?.stopTorrent){ window.nativeAPI.stopTorrent().catch(()=>{}); }
   if (window._torrentStatsTimer){ clearInterval(window._torrentStatsTimer); window._torrentStatsTimer = null; }
+  /* v5.5.1: cleanup garantizado del polling de metadata torrent */
+  if (window._metaPolling){ clearInterval(window._metaPolling); window._metaPolling = null; }
   const f = $('vidFrame');
   /* Sandbox-OFF por defecto: muchos servidores (frembed, vidsrc, etc.) detectan el
      atributo sandbox y bloquean la reproducción mostrando "Iframe Sandbox Detected".
@@ -1992,9 +2340,16 @@ async function getSpanishTitles(tmdbId, isSeries){
 async function renderLatBar(){
   if (!S.tmdbId){ $('latbar').style.display='none'; return; }
   $('latbar').style.display = '';
-  /* Fetch títulos alternativos ES en paralelo (no bloquea render inicial) */
+  /* v5.5.2: caché por tmdbId+altTitle \u2014 antes regeneraba ~30 enlaces externos
+     cada cambio de servidor/episodio, aunque el contenido del bar no cambiase. */
+  const cacheKey = `${S.tmdbId}|${S._altTitle||''}|${S.type}`;
+  if (window._latBarCache && window._latBarCache.key === cacheKey){
+    $('latlinks').innerHTML = window._latBarCache.html;
+    return;
+  }
+  /* Fetch t\u00edtulos alternativos ES en paralelo (no bloquea render inicial) */
   const altTitles = await getSpanishTitles(S.tmdbId, S.isSeries);
-  /* Título activo para buscar (por defecto el original; alt títulos selectibles) */
+  /* T\u00edtulo activo para buscar (por defecto el original; alt t\u00edtulos selectibles) */
   const activeAlt = S._altTitle || S.title;
   const q = encodeURIComponent(activeAlt);
   const kind = S.type==='anime'?'anime':(S.isSeries?'tv':'movie');
@@ -2017,7 +2372,7 @@ async function renderLatBar(){
   }
   const all = [...builtIn, ...custom, ...refs];
 
-  /* Chips de títulos alternativos en español */
+  /* Chips de t\u00edtulos alternativos en espa\u00f1ol */
   const altRow = altTitles.length
     ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;width:100%">
         <span style="font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);align-self:center;margin-right:4px">Buscar como:</span>
@@ -2025,12 +2380,19 @@ async function renderLatBar(){
         ${altTitles.map(t=>`<button class="filt-chip ${S._altTitle===t?'on':''}" onclick="setAltTitle('${escapeHtml(t).replace(/'/g,'&#39;')}')">${escapeHtml(t)}</button>`).join('')}
       </div>` : '';
 
-  $('latlinks').innerHTML = altRow + all.map(s=>
+  const html = altRow + all.map(s=>
     `<a class="extl" href="${s.url}" target="_blank" rel="noopener noreferrer" title="${s.name}">
       <img src="${s.favicon}" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:6px;border-radius:2px" onerror="this.style.display='none'">${s.name}</a>`
   ).join('');
+  window._latBarCache = { key: cacheKey, html };
+  $('latlinks').innerHTML = html;
 }
-function setAltTitle(t){ S._altTitle = t; renderLatBar(); toast(t?`Buscando como: ${t}`:'Volviendo al título original','ok'); }
+function setAltTitle(t){
+  S._altTitle = t;
+  window._latBarCache = null; /* invalidar cach\u00e9 al cambiar t\u00edtulo activo */
+  renderLatBar();
+  toast(t?`Buscando como: ${t}`:'Volviendo al t\u00edtulo original','ok');
+}
 
 /* ── FAVS & CW ── */
 function toggleFav(){
@@ -2079,8 +2441,13 @@ function renderCW(){
       <div class="card-meta"><span class="yr">${it.isSeries?'T'+it.curS+'·E'+it.curE:''}</span></div></div>
       <button class="card-remove" title="Quitar">✕</button>`;
     c.onclick = ()=>{
-      S.type = it.type; S.isSeries = it.isSeries;
-      document.querySelectorAll('.ttab').forEach(b=>b.classList.toggle('on', b.dataset.type===it.type));
+      /* v5.5.5: validar tipo antes de asignar \u2014 si el storage tiene un tipo desconocido
+         (extension futura, dato corrupto), antes S.type quedaba con valor inv\u00e1lido. */
+      const validTypes = ['movie','tv','anime','r18'];
+      if (validTypes.includes(it.type)){
+        S.type = it.type; S.isSeries = it.isSeries;
+        document.querySelectorAll('.ttab').forEach(b=>b.classList.toggle('on', b.dataset.type===it.type));
+      }
       openContent({ id:it.tmdbId, title:it.title, name:it.title, poster_path:it.poster }, { keepEpisode:true, curS:it.curS, curE:it.curE });
     };
     c.querySelector('.card-remove').onclick = ev=>{
@@ -2122,8 +2489,12 @@ function renderFavGrid(){
       <div class="card-body"><div class="card-title">${escapeHtml(it.title)}</div>
       <div class="card-meta"><span class="yr">${it.isSeries?'Serie':'Película'}</span></div></div>`;
     c.onclick = ()=>{
-      S.type = it.type; S.isSeries = it.isSeries;
-      document.querySelectorAll('.ttab').forEach(b=>b.classList.toggle('on', b.dataset.type===it.type));
+      /* v5.5.5: validar tipo antes de asignar */
+      const validTypes = ['movie','tv','anime','r18'];
+      if (validTypes.includes(it.type)){
+        S.type = it.type; S.isSeries = it.isSeries;
+        document.querySelectorAll('.ttab').forEach(b=>b.classList.toggle('on', b.dataset.type===it.type));
+      }
       openContent({ id:it.id, title:it.title, name:it.title, poster_path:it.poster });
     };
     grid.appendChild(c);
@@ -2220,7 +2591,9 @@ function downloadCurrent(){
 /* ── Modal helpers ── */
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
-/* v5.3.4: abrir el torrent player (WebTorrent + WebRTC) en nueva pestaña */
+/* v5.3.4: abrir el torrent player (WebTorrent + WebRTC) en nueva pestaña.
+   v5.5.0: fallback robusto — si window.open es bloqueado (sandbox/CSP/preview),
+   se navega en la misma ventana. Antes en algunos entornos el botón "no hacía nada". */
 function openTorrentPlayer(magnet){
   let url = 'torrent.html';
   if (magnet){
@@ -2229,7 +2602,20 @@ function openTorrentPlayer(magnet){
     const full = isInfohash ? `magnet:?xt=urn:btih:${m}` : m;
     url += '?magnet=' + encodeURIComponent(full);
   }
-  window.open(url, '_blank', 'noopener,noreferrer');
+  /* Detectar entornos restrictivos donde window.open NO puede abrir nueva ventana:
+     - Preview de Claude (claudeusercontent.com) → bloqueo por sandbox
+     - iframes con sandbox sin allow-popups
+     - Algunos proxies CORS */
+  const sandboxed = /claudeusercontent\.com|stackblitz|codesandbox|preview\.\w+/.test(location.hostname);
+  let w = null;
+  if (!sandboxed){
+    try { w = window.open(url, '_blank', 'noopener,noreferrer'); } catch(e){ w = null; }
+  }
+  if (!w || w === null){
+    /* fallback: navegar en misma ventana */
+    toast('Abriendo torrent player en esta ventana…','ok',2500);
+    location.href = url;
+  }
 }
 /* v5.3.5: si hay peli abierta → mostrar panel inline con torrents ES-LAT 1080p arrastrables.
    Si no hay peli → abrir player vacío en nueva pestaña */
@@ -2284,6 +2670,7 @@ async function showLatinMagnetsPanel(){
     const path = S.imdbId
       ? `/api/v2/movie_details.json?imdb_id=${S.imdbId}`
       : `/api/v2/list_movies.json?query_term=${encodeURIComponent(S.title)}&limit=5`;
+    /* v5.4.5: mirrors fallback */
     const data = await fetchYTS(path);
     const torrents = data?.data?.movie?.torrents
       ? data.data.movie.torrents.map(t=>({...t, title: data.data.movie.title_long}))
@@ -2391,7 +2778,7 @@ async function showLatinMagnetsPanel(){
     card.onmouseleave = ()=>card.style.borderColor = 'var(--bdr)';
     const langColor = r.lang==='LAT'?'var(--grn)' : r.lang==='DUAL'?'var(--gold)' : r.lang==='CAST'?'var(--blu)' : 'var(--dim)';
     card.innerHTML = `
-      <span style="display:inline-block;padding:4px 9px;border-radius:3px;font-family:var(--font-mono);font-size:.66rem;letter-spacing:.12em;
+      <span style="display:inline-block;padding:4px 9px;border-radius:3px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.66rem;letter-spacing:.12em;
         background:${langColor.replace('var(','rgba(').replace(')',',.15)').replace('--grn','74,222,128').replace('--gold','251,191,36').replace('--blu','96,165,250').replace('--dim','102,102,133')};
         border:1px solid ${langColor};color:${langColor};font-weight:600">${r.lang}</span>
       <div style="min-width:0">
@@ -2441,17 +2828,13 @@ function formatBytes(b){
   if (b >= 1e9) return (b/1e9).toFixed(2)+' GB';
   return (b/1e6).toFixed(0)+' MB';
 }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){
-  document.querySelectorAll('.modal.open').forEach(m=>m.classList.remove('open'));
-  if(document.body.classList.contains('cinema')) toggleCinema();
-  closeMini();
-}});
+/* v5.5.1: ESC handler unificado abajo en listener central de teclado */
 
 /* ── Admin (mapeo manual) ── Ctrl+Shift+A ── */
 function getAdminMap(){ try { return JSON.parse(localStorage.getItem('nc_admin_map')||'{}'); } catch { return {}; } }
 function setAdminMap(m){ try { localStorage.setItem('nc_admin_map', JSON.stringify(m)); } catch{} }
 function renderAdmin(){
-  const tb = document.querySelector('#adminTable tbody'); tb.innerHTML='';
+  const tb = document.querySelector('#adminTable tbody'); if (!tb) return; tb.innerHTML='';
   const m = getAdminMap();
   Object.entries(m).forEach(([id,v])=>{
     const tr = document.createElement('tr');
@@ -2471,7 +2854,7 @@ function addAdminMap(){
 }
 function updateAdminMap(id,k,v){ const m=getAdminMap(); if(m[id]){ m[id][k]=v; setAdminMap(m); } }
 function delAdminMap(id){ const m=getAdminMap(); delete m[id]; setAdminMap(m); renderAdmin(); }
-document.addEventListener('keydown', e=>{ if(e.ctrlKey&&e.shiftKey&&e.key==='A'){ e.preventDefault(); openModal('adminModal'); renderAdmin(); renderSites(); renderPending(); }});
+/* v5.5.1: deprecated \u2014 Ctrl+Shift+A unificado en listener central de teclado */
 
 /* ── Custom external sites ── */
 function renderSites(){
@@ -2490,11 +2873,26 @@ function addCustomSite(){
   const name=$('siteName').value.trim(); let url=$('siteUrl').value.trim();
   if(!name||!url){ toast('Nombre y URL requeridos','err'); return; }
   if(!/^https?:/.test(url)) url='https://'+url;
-  if(!url.includes('{q}') && !url.includes('{title}')) url+='?s={q}';
+  /* v5.5.5: validar que la URL es parseable antes de guardar \u2014 si no, romper\u00eda renderLatBar despu\u00e9s */
+  try { new URL(url); } catch { toast('URL mal formada','err'); return; }
+  /* v5.4.7 bugfix: si la URL ya tiene query string, usar & en vez de ? para no romperla */
+  if(!url.includes('{q}') && !url.includes('{title}')) url += (url.includes('?')?'&':'?')+'s={q}';
   const sites=getCustomSites(); sites.push({name,url,favicon:siteFavicon(url)}); setCustomSites(sites);
-  $('siteName').value=''; $('siteUrl').value=''; renderSites(); toast('Sitio añadido','ok');
+  $('siteName').value=''; $('siteUrl').value=''; renderSites(); toast('Sitio a\u00f1adido','ok');
 }
-function updateSite(i,k,v){ const s=getCustomSites(); if(s[i]){ s[i][k]=v; if(k==='url') s[i].favicon=siteFavicon(v); setCustomSites(s); } }
+function updateSite(i,k,v){
+  /* v5.5.5: si est\u00e1n actualizando URL, validar que sigue siendo parseable.
+     Si no, revertir + toast. Antes una URL rota dejaba el bar de b\u00fasqueda muerto. */
+  if (k === 'url'){
+    let u = v.trim();
+    if (!/^https?:/.test(u)) u = 'https://' + u;
+    try { new URL(u); }
+    catch { toast('URL inv\u00e1lida \u2014 cambio descartado','err'); renderSites(); return; }
+    v = u;
+  }
+  const s=getCustomSites();
+  if(s[i]){ s[i][k]=v; if(k==='url') s[i].favicon=siteFavicon(v); setCustomSites(s); }
+}
 function delSite(i){ const s=getCustomSites(); s.splice(i,1); setCustomSites(s); renderSites(); }
 
 /* ── Pending (sin doblaje encontrado) ── */
@@ -2537,6 +2935,17 @@ function delPending(id){ const p=getPending(); delete p[id]; setPending(p); rend
 /* ── Botón "Forzar Español" ── */
 function forceSpanish(){
   if(!S.tmdbId) return;
+  /* v5.5.6: si ya hay un mapeo guardado, no machacar workflow \u2014 simplemente reproducir.
+     Antes el bot\u00f3n abr\u00eda Google + a\u00f1ad\u00eda pending aunque ya hubieras encontrado URL. */
+  const existingMap = getAdminMap()[S.tmdbId];
+  if (existingMap && existingMap.url){
+    toast('Ya tienes mapeo guardado \u2014 reproduciendo desde admin map\u2026','ok',3000);
+    const finalUrl = existingMap.url.replace('{s}',S.curS).replace('{e}',S.curE);
+    if (/\.m3u8/i.test(finalUrl)) playHls(finalUrl, {});
+    else if (/\.mp4(\?|$)/i.test(finalUrl)) playMp4(finalUrl);
+    else playIframe(finalUrl);
+    return;
+  }
   markPending();
   /* v5.3.3: abrir UN sitio principal (Google con site:) y mostrar los demás en un banner clicable.
      Browsers bloquean window.open en setTimeout fuera del gesture context — las URLs >0 nunca abrían. */
@@ -2748,19 +3157,20 @@ async function loadTrailer(){
   if(!S.tmdbId) return;
   const ep=S.isSeries?'tv':'movie';
   try{
-    /* v5.3.2: pedir ES y EN en paralelo */
+    /* v5.3.2: pedir ES y EN en paralelo
+       v5.5.1: usar tmdbFetch (caché 1h) en vez de fetch directo \u2014 ahorra peticiones repetidas */
     const [d, d2] = await Promise.all([
-      fetch(`https://api.themoviedb.org/3/${ep}/${S.tmdbId}/videos?api_key=${KEY}&language=es-MX`).then(r=>r.json()).catch(()=>({})),
-      fetch(`https://api.themoviedb.org/3/${ep}/${S.tmdbId}/videos?api_key=${KEY}`).then(r=>r.json()).catch(()=>({})),
+      tmdbFetch(`https://api.themoviedb.org/3/${ep}/${S.tmdbId}/videos?api_key=${KEY}&language=es-MX`).catch(()=>({})),
+      tmdbFetch(`https://api.themoviedb.org/3/${ep}/${S.tmdbId}/videos?api_key=${KEY}`).catch(()=>({})),
     ]);
     const v = (d.results||[]).find(x=>x.type==='Trailer'&&x.site==='YouTube')
           || (d2.results||[]).find(x=>x.type==='Trailer'&&x.site==='YouTube');
-    if(!v){ toast('Sin tráiler','err'); return; }
+    if(!v){ toast('Sin tr\u00e1iler','err'); return; }
     /* v5.3.2: probar varias instancias Invidious en orden aleatorio (mejor que pick fijo) */
     const shuffled = [...INVIDIOUS].sort(()=>Math.random()-0.5);
     playIframe(`${shuffled[0]}/embed/${v.key}?autoplay=1`);
-    toast('Reproduciendo tráiler');
-  }catch{ toast('Error tráiler','err'); }
+    toast('Reproduciendo tr\u00e1iler');
+  }catch{ toast('Error tr\u00e1iler','err'); }
 }
 
 /* ── Personal rating + note ── */
@@ -2775,8 +3185,23 @@ function renderNoteSection(){
   const old=document.getElementById('noteBox'); if(old) old.outerHTML=html;
   else $('srvSection').insertAdjacentHTML('afterend', html);
 }
-function setRating(n){ const notes=STORE.get('notes',{}); notes[S.tmdbId]=notes[S.tmdbId]||{}; notes[S.tmdbId].rating=n; STORE.set('notes',notes); renderNoteSection(); toast(`★ ${n}/5`,'ok'); }
-function saveNote(v){ const notes=STORE.get('notes',{}); notes[S.tmdbId]=notes[S.tmdbId]||{}; notes[S.tmdbId].note=v; STORE.set('notes',notes); }
+function setRating(n){
+  /* v5.5.6: validar S.tmdbId antes de guardar \u2014 antes notes[null] generaba basura */
+  if (!S.tmdbId) return;
+  const notes=STORE.get('notes',{});
+  notes[S.tmdbId]=notes[S.tmdbId]||{};
+  notes[S.tmdbId].rating=n;
+  STORE.set('notes',notes);
+  renderNoteSection();
+  toast(`★ ${n}/5`,'ok');
+}
+function saveNote(v){
+  if (!S.tmdbId) return;  /* v5.5.6: mismo \u2014 sin tmdbId no guardar */
+  const notes=STORE.get('notes',{});
+  notes[S.tmdbId]=notes[S.tmdbId]||{};
+  notes[S.tmdbId].note=v;
+  STORE.set('notes',notes);
+}
 
 /* ── Cinema mode ── */
 function toggleCinema(){
@@ -2820,15 +3245,21 @@ function closeMini(){
 function closeMini_OLD_unused(){
   /* v5.3.3 deprecated · sustituido por toggle de clase .mini en .video-wrap */
 }
-/* auto-show mini on scroll past video */
+/* auto-show mini on scroll past video
+   v5.5.1: throttle a 100ms \u2014 antes corr\u00eda 60 veces/seg en scroll r\u00e1pido (waste CPU/GPU). */
 let _miniObs;
+let _scrollT = null;
 window.addEventListener('scroll', ()=>{
-  if(!$('player').classList.contains('on')) return;
-  const v=$('vidFrame'); if(!v||!v.src||$('vidFrame').style.display==='none') return;
-  const r=v.getBoundingClientRect();
-  if(r.bottom<60 && !$('videoWrap').classList.contains('mini')){ openMini(); }
-  else if(r.bottom>200 && $('videoWrap').classList.contains('mini')){ closeMini(); }
-});
+  if (_scrollT) return;
+  _scrollT = setTimeout(()=>{
+    _scrollT = null;
+    if(!$('player').classList.contains('on')) return;
+    const v=$('vidFrame'); if(!v||!v.src||$('vidFrame').style.display==='none') return;
+    const r=v.getBoundingClientRect();
+    if(r.bottom<60 && !$('videoWrap').classList.contains('mini')){ openMini(); }
+    else if(r.bottom>200 && $('videoWrap').classList.contains('mini')){ closeMini(); }
+  }, 100);
+}, { passive:true });
 
 /* ── Surprise me ── */
 async function surpriseMe(){
@@ -2893,24 +3324,32 @@ async function surpriseMe(){
   }
 }
 
-/* ── Stats ── */
+/* \u2500\u2500 Stats \u2500\u2500 */
 function renderStats(){
   const h=STORE.get('history',{}); const favs=STORE.get('favs',{}); const notes=STORE.get('notes',{});
-  const items=Object.values(h); const totalMins=items.reduce((a,b)=>a+((b.progress||0)*1.2),0);
+  const items=Object.values(h);
+  /* v5.5.5 fix: el c\u00e1lculo anterior trataba `progress` (%) como minutos \u2014 absurdo.
+     Ahora estimamos: pel\u00edcula promedio 110min, episodio promedio 45min. Multiplicamos
+     por (progress/100) para tiempo real visto. */
+  const totalMins = items.reduce((acc, it) => {
+    const avg = it.isSeries ? 45 : 110;
+    const pct = Math.min(100, Math.max(0, it.progress || 0)) / 100;
+    return acc + (avg * pct);
+  }, 0);
   const ratings=Object.values(notes).map(n=>n.rating||0).filter(r=>r>0);
-  const avgR=ratings.length?(ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1):'—';
+  const avgR=ratings.length?(ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1):'\u2014';
   const series=items.filter(i=>i.isSeries).length;
   const pelis=items.length-series;
   $('statsBody').innerHTML = `
     <div class="stats-grid">
       <div class="stat-card"><div class="num">${items.length}</div><div class="lbl">Visto</div></div>
-      <div class="stat-card"><div class="num">${pelis}</div><div class="lbl">Películas</div></div>
+      <div class="stat-card"><div class="num">${pelis}</div><div class="lbl">Pel\u00edculas</div></div>
       <div class="stat-card"><div class="num">${series}</div><div class="lbl">Series</div></div>
       <div class="stat-card"><div class="num">${Math.round(totalMins/60)}h</div><div class="lbl">Tiempo (estim.)</div></div>
       <div class="stat-card"><div class="num">${Object.keys(favs).length}</div><div class="lbl">Favoritos</div></div>
       <div class="stat-card"><div class="num">${avgR}</div><div class="lbl">Rating medio</div></div>
     </div>
-    <p style="font-size:.74rem;color:var(--dim);margin-top:10px">Las horas son una estimación basada en el progreso del visor.</p>`;
+    <p style="font-size:.74rem;color:var(--dim);margin-top:10px">Las horas son una estimaci\u00f3n basada en el progreso del visor (~110min/pel\u00edcula, ~45min/episodio).</p>`;
 }
 
 /* ── Export / Import ── */
@@ -2929,16 +3368,39 @@ function importData(){
   inp.onchange=()=>{
     const f=inp.files[0]; if(!f) return;
     const r=new FileReader(); r.onload=()=>{
-      try{ const j=JSON.parse(r.result); if(j.app!=='NovaCine') throw 0;
+      try{
+        const j=JSON.parse(r.result); if(j.app!=='NovaCine') throw 0;
+        /* v5.5.5: confirmar antes de sobrescribir \u2014 antes destru\u00edamos favoritos/historial sin avisar */
+        const keysToImport = Object.keys(j.data || {});
+        const existing = ['favs','history','notes','admin_map'].filter(k => localStorage.getItem('nc_'+k));
+        let proceed = true;
+        if (existing.length){
+          proceed = confirm(`Vas a sobrescribir tus datos actuales:\n${existing.map(k=>'\u2022 '+k).join('\n')}\n\nLas claves del backup (${keysToImport.length}) reemplazar\u00e1n las actuales. \u00bfContinuar?`);
+        }
+        if (!proceed){ toast('Importaci\u00f3n cancelada','err'); return; }
         Object.entries(j.data).forEach(([k,v])=>localStorage.setItem('nc_'+k,JSON.stringify(v)));
-        toast('Importado · recargando…','ok'); setTimeout(()=>location.reload(),900);
-      }catch{ toast('Archivo inválido','err'); }
+        toast('Importado \u00b7 recargando\u2026','ok'); setTimeout(()=>location.reload(),900);
+      }catch{ toast('Archivo inv\u00e1lido','err'); }
     }; r.readAsText(f);
   }; inp.click();
 }
 
-/* ── Keyboard shortcuts ── */
+/* ── Keyboard shortcuts ──
+   v5.5.1: UN solo listener centralizado para TODOS los atajos. Antes hab\u00eda 4 listeners de keydown
+   distintos: ESC modal, Ctrl+Shift+A admin, atajos generales \u2014 cada uno chequeando todos los eventos. */
 document.addEventListener('keydown', e=>{
+  /* Ctrl+Shift+A \u2192 admin (siempre, incluso en inputs) */
+  if(e.ctrlKey&&e.shiftKey&&e.key==='A'){
+    e.preventDefault(); openModal('adminModal'); renderAdmin(); renderSites(); renderPending(); return;
+  }
+  /* ESC \u2192 cerrar modales / cinema / mini (siempre) */
+  if(e.key==='Escape'){
+    document.querySelectorAll('.modal.open').forEach(m=>m.classList.remove('open'));
+    if(document.body.classList.contains('cinema')) toggleCinema();
+    closeMini();
+    return;
+  }
+  /* Atajos de una sola letra solo si NO estamos en un input */
   if(e.target.matches('input,textarea')) return;
   if(e.ctrlKey||e.metaKey||e.altKey) return;
   const k=e.key.toLowerCase();
@@ -2959,7 +3421,11 @@ document.addEventListener('keydown', e=>{
 });
 function navEp(dir){
   if(!S.isSeries) return;
-  const eps=S.seasons[S.curS]||[]; const next=S.curE+dir;
+  /* v5.5.5: defensive \u2014 si loadSeason a\u00fan no retorn\u00f3 o S.seasons fue limpiado,
+     antes ped\u00edamos `eps.length` sobre undefined y se rompi\u00eda. */
+  const eps = S.seasons[S.curS];
+  if (!eps || !eps.length){ toast('Temporada a\u00fan no cargada','err'); return; }
+  const next=S.curE+dir;
   if(next<1||next>eps.length){ toast('Sin episodio','err'); return; }
   S.curE=next;
   document.querySelectorAll('.ep').forEach(b=>b.classList.toggle('on', b.textContent==='E'+S.curE));
@@ -2987,17 +3453,27 @@ openContent = async function(item, opts){
 async function loadKeywords(){
   try{
     const ep = S.isSeries?'tv':'movie';
-    const r = await fetch(`https://api.themoviedb.org/3/${ep}/${S.tmdbId}/keywords?api_key=${KEY}`);
-    const d = await r.json();
+    /* v5.5.1: tmdbFetch cacheado en vez de fetch directo */
+    const d = await tmdbFetch(`https://api.themoviedb.org/3/${ep}/${S.tmdbId}/keywords?api_key=${KEY}`);
     const kws = (d.keywords||d.results||[]).slice(0,8);
     if (!kws.length) return;
     const old = document.getElementById('kwBox'); if (old) old.remove();
     const div = document.createElement('div'); div.id = 'kwBox'; div.style.marginTop = '14px';
-    const chips = kws.map(k=>{
-      const safeName = escapeHtml(k.name).replace(/'/g,'&#39;');
-      return `<button class="filt-chip" onclick="searchByKeyword(${k.id},'${safeName}')">${escapeHtml(k.name)}</button>`;
-    }).join('');
-    div.innerHTML = `<div class="section-label" style="margin-bottom:8px">Temas similares</div><div class="filters" style="margin:0">${chips}</div>`;
+    /* v5.5.3: construir chips con createElement + addEventListener en vez de onclick inline.
+       Antes el escape de `safeName` no manejaba backslashes ni Unicode, vulnerable a quotes raros. */
+    const label = document.createElement('div');
+    label.className = 'section-label'; label.style.marginBottom = '8px';
+    label.textContent = 'Temas similares';
+    const filters = document.createElement('div');
+    filters.className = 'filters'; filters.style.margin = '0';
+    kws.forEach(k => {
+      const b = document.createElement('button');
+      b.className = 'filt-chip';
+      b.textContent = k.name || '';
+      b.onclick = () => searchByKeyword(k.id, k.name || '');
+      filters.appendChild(b);
+    });
+    div.appendChild(label); div.appendChild(filters);
     document.getElementById('simBox')?.insertAdjacentElement('afterend', div) || $('srvSection').insertAdjacentElement('afterend', div);
   }catch{}
 }
@@ -3006,10 +3482,11 @@ async function searchByKeyword(kid, name){
   goHome();
   const grid = $('trendGrid'); const lbl = $('trendLbl');
   lbl.textContent = `Tema: ${name}`;
-  grid.innerHTML = '<div class="state"><div class="spinner"></div><p>Buscando por tema…</p></div>';
+  grid.innerHTML = '<div class="state"><div class="spinner"></div><p>Buscando por tema\u2026</p></div>';
   try{
-    const r = await fetch(`https://api.themoviedb.org/3/discover/${ep}?api_key=${KEY}&language=es-MX&sort_by=popularity.desc&with_keywords=${kid}&page=1`);
-    const d = await r.json(); const items = d.results||[];
+    /* v5.5.1: cacheado */
+    const d = await tmdbFetch(`https://api.themoviedb.org/3/discover/${ep}?api_key=${KEY}&language=es-MX&sort_by=popularity.desc&with_keywords=${kid}&page=1`);
+    const items = d.results||[];
     grid.innerHTML = ''; items.forEach(m=>grid.appendChild(makeCard(m)));
     if (!items.length) grid.innerHTML = '<div class="state"><p>Sin resultados para este tema</p></div>';
   }catch{ grid.innerHTML = '<div class="state"><p>Error</p></div>'; }
@@ -3017,8 +3494,9 @@ async function searchByKeyword(kid, name){
 async function loadSimilar(){
   try{
     const ep=S.isSeries?'tv':'movie';
-    const r=await fetch(`https://api.themoviedb.org/3/${ep}/${S.tmdbId}/recommendations?api_key=${KEY}&language=es-MX&page=1`);
-    const d=await r.json(); const items=(d.results||[]).slice(0,10);
+    /* v5.5.1: cacheado */
+    const d = await tmdbFetch(`https://api.themoviedb.org/3/${ep}/${S.tmdbId}/recommendations?api_key=${KEY}&language=es-MX&page=1`);
+    const items=(d.results||[]).slice(0,10);
     if(!items.length) return;
     const old=document.getElementById('simBox'); if(old) old.remove();
     const div=document.createElement('div'); div.id='simBox'; div.style.marginTop='18px';
@@ -3042,21 +3520,19 @@ function sharePeli(){
 }
 function checkDeeplink(){
   const h=location.hash.slice(1); if(!h) return;
-  const [type,id]=h.split('/'); if(!id) return;
+  const [type,id]=h.split('/');
+  /* v5.5.3: validar que el id sea num\u00e9rico y type sea conocido \u2014 antes openContent({id:NaN})
+     hac\u00eda fetch a URL inv\u00e1lida y dejaba el player roto. */
+  const numId = parseInt(id, 10);
+  if (!Number.isFinite(numId) || numId <= 0) return;
+  if (!['movie','tv','anime','r18'].includes(type)) return;
   S.type=type; S.isSeries=(type==='tv'||type==='anime');
   document.querySelectorAll('.ttab').forEach(b=>b.classList.toggle('on', b.dataset.type===type));
-  openContent({id:+id});
+  openContent({id:numId});
 }
 
 /* ── R18: actrices, calidad ── */
-async function r18Quality(id){
-  try{
-    const r=await fetch(`https://www.eporner.com/api/v2/video/id/?id=${id}&format=json`);
-    const d=await r.json();
-    if(d.url){ window.open(d.url,'_blank'); toast('Abriendo página de descarga','ok'); }
-    else toast('Sin URL directa','err');
-  }catch{ toast('Error','err'); }
-}
+/* v5.4.7: r18Quality eliminado (dead code, nunca llamado) */
 
 /* ── Override loadTrending to add "Próximamente" + "Top rated" toggle ── */
 const _oldTrend = loadTrending;
@@ -3100,10 +3576,93 @@ function setHomeView(v){ STORE.set('home_view',v); loadTrending(); }
 window.addEventListener('hashchange', checkDeeplink);
 setTimeout(checkDeeplink, 400);
 
+/* v5.5.7: sincronizaci\u00f3n entre tabs \u2014 si el usuario tiene NovaCine abierta en 2 pesta\u00f1as
+   y a\u00f1ade un favorito en una, la otra refresca su vista sin recargar. */
+window.addEventListener('storage', e => {
+  if (!e.key || !e.key.startsWith('nc_')) return;
+  /* Solo refrescar UI visible para evitar trabajo innecesario */
+  if (e.key === 'nc_favs' && $('favSec').style.display !== 'none') renderFavGrid();
+  if (e.key === 'nc_history' && $('cwSec').style.display !== 'none') renderCW();
+  if (e.key === 'nc_theme'){
+    try { initTheme(); } catch{}
+  }
+});
+
+/* v5.5.7: visibility change \u2014 cuando el usuario cambia de pesta\u00f1a o minimiza,
+   pausar el video nativo. Cuando vuelve, no auto-reanudar (puede ser molesto).
+   El iframe de servidores embed no podemos controlar (cross-origin). */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){
+    const v = $('cineVideo');
+    if (v && !v.paused && v.style.display !== 'none'){
+      try { v.pause(); v._wasPlayingHidden = true; } catch{}
+    }
+  } else {
+    const v = $('cineVideo');
+    if (v && v._wasPlayingHidden){
+      v._wasPlayingHidden = false;
+      /* No auto-play \u2014 que el usuario decida */
+    }
+  }
+});
+
+/* v5.5.7: resize handler \u2014 cerrar dropdowns abiertos cuando rota el dispositivo,
+   evita layout roto con el panel year medio salido de pantalla. */
+let _resizeT = null;
+window.addEventListener('resize', () => {
+  if (_resizeT) return;
+  _resizeT = setTimeout(() => {
+    _resizeT = null;
+    /* Cerrar paneles flotantes que pueden quedar fuera de pantalla */
+    $('dd')?.classList.remove('open');
+    $('twPnl')?.classList.remove('open');
+    /* Year panel */
+    document.getElementById('yearPanel')?.style && (document.getElementById('yearPanel').style.display = 'none');
+  }, 250);
+});
+
+/* v5.5.7: beforeunload \u2014 avisar si hay torrent nativo descargando + guardar progress final
+   del video en historial. Sin esto el usuario perd\u00eda los \u00faltimos minutos. */
+window.addEventListener('beforeunload', e => {
+  /* Forzar guardar progreso de cineVideo si est\u00e1 reproduciendo */
+  const v = $('cineVideo');
+  if (v && v.duration && isFinite(v.duration) && v.currentTime > 0 && S.tmdbId){
+    const pct = Math.min(98, Math.round((v.currentTime / v.duration) * 100));
+    if (pct > 0) saveCW(pct);
+  }
+  /* Avisar si torrent nativo activo */
+  if (IS_ELECTRON && window.nativeAPI?.torrentProgress){
+    window.nativeAPI.torrentProgress().then(p => {
+      if (p && p.progress < 100){
+        e.preventDefault();
+        e.returnValue = 'Torrent activo descargando \u2014 \u00bfseguro que quieres salir?';
+      }
+    }).catch(()=>{});
+  }
+});
+
 /* INIT */
 initTheme();
 renderGenres();
 goHome();
+
+/* v5.5.7: auto-update check al iniciar (solo en .exe) \u2014 notifica via toast persistente.
+   Antes el check existía en preload pero nadie lo llamaba desde el frontend. */
+if (IS_ELECTRON && window.nativeAPI?.checkUpdate){
+  setTimeout(async () => {
+    try {
+      const info = await window.nativeAPI.checkUpdate();
+      if (info && info.hasUpdate && info.latest){
+        const t = $('toast');
+        t.innerHTML = `\ud83c\udd95 Nueva versi\u00f3n disponible: <b>${info.latest}</b> (tienes ${info.current||'?'})
+          ${info.downloadUrl ? `<br><a href="${info.downloadUrl}" target="_blank" style="color:var(--grn);text-decoration:underline">\u2193 Descargar</a>` : ''}`;
+        t.className = 'toast ok show';
+        clearTimeout(t._to);
+        t._to = setTimeout(() => t.classList.remove('show'), 12000);
+      }
+    } catch(e){ console.warn('[checkUpdate]', e.message); }
+  }, 3000);
+}
 </script>
 </body>
 </html>

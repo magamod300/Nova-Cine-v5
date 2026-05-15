@@ -17,7 +17,15 @@ let WebTorrent;
 try { WebTorrent = require('webtorrent'); } catch(e){ console.warn('[NovaCine] WebTorrent no disponible:', e.message); }
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-app.commandLine.appendSwitch('disable-features', 'AutoplayIgnoreWebAudio');
+app.commandLine.appendSwitch('disable-features', 'AutoplayIgnoreWebAudio,CrossOriginOpenerPolicy,ThirdPartyStoragePartitioning');
+/* v5.4.3: forzar hardware decode + todos los codecs disponibles */
+app.commandLine.appendSwitch('enable-features', 'PlatformHEVCDecoderSupport,VaapiVideoDecoder,VaapiVideoEncoder');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-accelerated-video-decode');
+app.commandLine.appendSwitch('enable-zero-copy');
+/* v5.4.8: silenciar el spam de "Third-party cookie will be blocked" en consola */
+app.commandLine.appendSwitch('disable-blink-features', 'CookieDeprecationFacilitatedTesting');
+app.commandLine.appendSwitch('disable-third-party-cookies-warnings');
 
 /* ═══ AD-BLOCK reforzado v5.2.4 ═══ */
 const AD_DOMAINS = new Set([
@@ -75,15 +83,92 @@ app.whenReady().then(()=>{
   });
 
   win.loadFile(path.join(__dirname, 'index.html'));
-  /* v5.3.3: autoHideMenuBar:true ya oculta el menú al iniciar. setMenuBarVisibility(false) era redundante (post-load) */
+
+  /* v5.5.0: SHORTCUTS DEVTOOLS — siempre accesibles para diagnóstico.
+     F12 / Ctrl+Shift+I abren las herramientas de desarrollador incluso en producción. */
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown'){
+      if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')){
+        win.webContents.toggleDevTools();
+        event.preventDefault();
+      }
+      if ((input.control || input.meta) && input.key.toLowerCase() === 'r'){
+        win.webContents.reload();
+        event.preventDefault();
+      }
+      if (input.key === 'F5'){
+        win.webContents.reload();
+        event.preventDefault();
+      }
+    }
+  });
+
+  /* v5.5.0: INYECCIÓN DE ERROR HANDLER — captura errores invisibles y los muestra como
+     banner rojo en pantalla. Antes los errores silenciosos rompían botones sin avisar. */
+  win.webContents.on('dom-ready', () => {
+    win.webContents.executeJavaScript(`
+      (function(){
+        if (window.__novacineErrHandler) return; window.__novacineErrHandler = true;
+        function showErr(msg){
+          let bar = document.getElementById('__nc_err_bar');
+          if (!bar){
+            bar = document.createElement('div');
+            bar.id = '__nc_err_bar';
+            bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#dc2626;color:#fff;padding:8px 14px;font:13px/1.4 system-ui,sans-serif;z-index:99999;box-shadow:0 4px 14px rgba(0,0,0,.6);max-height:30vh;overflow-y:auto;white-space:pre-wrap';
+            bar.innerHTML = '<span style="float:right;cursor:pointer;font-size:18px;line-height:1;margin-left:8px" onclick="this.parentNode.style.display=\\'none\\'">×</span><div id="__nc_err_msgs"></div>';
+            document.body && document.body.appendChild(bar);
+          }
+          const msgs = document.getElementById('__nc_err_msgs');
+          if (msgs){
+            const ts = new Date().toTimeString().slice(0,8);
+            msgs.innerHTML = '<div>['+ts+'] '+String(msg).slice(0,300)+'</div>' + msgs.innerHTML;
+            if (msgs.children.length > 6) msgs.removeChild(msgs.lastChild);
+          }
+        }
+        window.addEventListener('error', e=>{
+          showErr('JS ERROR: '+(e.message||e.error?.message||'?')+' @ '+(e.filename||'').split('/').pop()+':'+e.lineno);
+        });
+        window.addEventListener('unhandledrejection', e=>{
+          const r = e.reason; const m = r && (r.message||r.toString()) || '?';
+          /* Filtrar rejects esperados (fetch fail offline, etc.) */
+          if (/Failed to fetch|NetworkError|AbortError/i.test(m)) return;
+          showErr('PROMISE: '+m.slice(0,200));
+        });
+      })();
+    `).catch(()=>{});
+  });
 
   win.webContents.setWindowOpenHandler(({ url })=>{
     if (isAd(url)) return { action:'deny' };
+    /* v5.4.8: permitir abrir archivos LOCALES (torrent.html, etc.) en ventana nueva. */
     try {
-      const host = new URL(url).hostname;
-      const allowExternal = /youtube|google|imdb|themoviedb|pelisplus|cuevana|stremio|github|cobalt|savefrom|yifysubtitles/i.test(host);
-      if (allowExternal) shell.openExternal(url).catch(()=>{});
-    } catch{}
+      const parsed = new URL(url);
+      if (parsed.protocol === 'file:'){
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            width: 1200, height: 800,
+            backgroundColor: '#090910',
+            title: 'NovaCine',
+            autoHideMenuBar: true,
+            webPreferences: {
+              preload: path.join(__dirname, 'preload.js'),
+              contextIsolation: true,
+              nodeIntegration: false,
+              sandbox: false,
+              webviewTag: true,
+            },
+          },
+        };
+      }
+      /* v5.5.0: PERMITIR TODAS LAS URLs HTTP(S) externas que NO sean ads.
+         Antes había un whitelist de 11 dominios que silenciaba TODOS los demás
+         (animeflv, monoschinos, nyaa, 1337x, yts, seriesflix, sololatino, etc.).
+         El usuario clickaba un servidor externo y "no pasaba nada". */
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:'){
+        shell.openExternal(url).catch(err => console.warn('[openExternal]', err.message));
+      }
+    } catch(e){ console.warn('[windowOpen] URL inválida:', url, e.message); }
     return { action:'deny' };
   });
 });
@@ -91,13 +176,22 @@ app.whenReady().then(()=>{
 app.on('window-all-closed', ()=>{
   if (streamServer){ try{streamServer.close();}catch{} }
   if (wtClient){ try{wtClient.destroy();}catch{} }
+  /* v5.5.2: limpiar archivos torrent temporales al cerrar (puede crecer mucho con uso) */
+  try {
+    const fs = require('fs');
+    const tmp = path.join(os.tmpdir(), 'novacine');
+    if (fs.existsSync(tmp)){
+      fs.rmSync(tmp, { recursive:true, force:true, maxRetries:3 });
+    }
+  } catch(e){ console.warn('[cleanup] tmp:', e.message); }
   if (process.platform !== 'darwin') app.quit();
 });
 
 /* ═══ TORRENT STREAMING (WebTorrent + HTTP Range local) ═══ */
 let wtClient = null, activeTorrent = null, streamServer = null;
 
-/* v5.4.5: trackers nativos — UDP/HTTP/WSS, máximo descubrimiento de peers */
+/* v5.4.5: trackers añadidos a cada torrent para descubrir más peers.
+   Node.js soporta UDP/HTTP además de WSS — usa los protocolos completos. */
 const NATIVE_TRACKERS = [
   'udp://tracker.opentrackr.org:1337/announce',
   'udp://open.stealth.si:80/announce',
@@ -118,12 +212,12 @@ const NATIVE_TRACKERS = [
 
 function getWT(){
   if (!wtClient && WebTorrent){
-    /* v5.4.5: más peer slots + DHT + PEX + LSD */
+    /* v5.4.5: maxConns 200 (default 55) — en native podemos permitir muchísimos más peers */
     wtClient = new WebTorrent({
       maxConns: 200,
-      dht: true,
-      utPex: true,
-      lsd: true,
+      dht: true,       /* DHT funciona en native (UDP), descubre peers sin tracker */
+      utPex: true,     /* Peer exchange */
+      lsd: true,       /* Local Service Discovery — peers en tu misma LAN */
     });
     wtClient.on('error', e => console.warn('[WT]', e.message));
   }
@@ -141,10 +235,22 @@ function fetchJSON(url, opts={}){
   return new Promise((resolve, reject)=>{
     const mod = url.startsWith('https') ? https : http;
     /* v5.3.3: rejectUnauthorized solo si se pide explícitamente (algunos trackers tienen certs malos).
-       Default true protege MITM en endpoints sensibles (auto-update, etc.). */
+       Default true protege MITM en endpoints sensibles (auto-update, etc.).
+       v5.5.6: + seguir redirects 301/302 (yts.mx \u2192 yts.am suele pasar) + validar HTTP status. */
     const reqOpts = { headers:{ 'User-Agent':CHROME_UA }, timeout:12000,
       rejectUnauthorized: opts.allowInsecure ? false : true };
+    const redirects = opts._redirects || 0;
     const req = mod.get(url, reqOpts, res=>{
+      /* Manejar redirects (m\u00e1ximo 3) */
+      if ([301,302,303,307,308].includes(res.statusCode) && res.headers.location && redirects < 3){
+        res.resume();
+        const next = new URL(res.headers.location, url).toString();
+        return resolve(fetchJSON(next, { ...opts, _redirects: redirects + 1 }));
+      }
+      if (res.statusCode >= 400){
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
       let data='';
       res.on('data', c=>data+=c);
       res.on('end', ()=>{ try{ resolve(JSON.parse(data)); }catch(e){ reject(e); } });
@@ -158,7 +264,18 @@ function fetchText(url, opts={}){
     const mod = url.startsWith('https') ? https : http;
     const reqOpts = { headers:{ 'User-Agent':CHROME_UA }, timeout:12000,
       rejectUnauthorized: opts.allowInsecure ? false : true };
+    const redirects = opts._redirects || 0;
     const req = mod.get(url, reqOpts, res=>{
+      /* v5.5.6: redirects + status */
+      if ([301,302,303,307,308].includes(res.statusCode) && res.headers.location && redirects < 3){
+        res.resume();
+        const next = new URL(res.headers.location, url).toString();
+        return resolve(fetchText(next, { ...opts, _redirects: redirects + 1 }));
+      }
+      if (res.statusCode >= 400){
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
       let data='';
       res.on('data', c=>data+=c);
       res.on('end', ()=>resolve(data));
@@ -286,19 +403,57 @@ ipcMain.handle('check-update', async () => {
 
 ipcMain.handle('stream-torrent', (_e, magnet)=>{
   return new Promise((resolve, reject)=>{
+    /* v5.5.9: validar magnet input \u2014 si viene basura, webtorrent crashea internamente
+       y el error no se captura limpiamente. */
+    if (typeof magnet !== 'string' || !magnet.trim()){
+      reject(new Error('Magnet inv\u00e1lido (vac\u00edo)'));
+      return;
+    }
+    const m = magnet.trim();
+    const isMagnet = /^magnet:\?[^&]*xt=urn:btih:[a-f0-9]{32,40}/i.test(m);
+    const isHash = /^[a-f0-9]{40}$/i.test(m) || /^[a-z2-7]{32}$/i.test(m);
+    if (!isMagnet && !isHash){
+      reject(new Error('Magnet con formato inv\u00e1lido'));
+      return;
+    }
+    const finalMagnet = isHash ? `magnet:?xt=urn:btih:${m}` : m;
+
     const client = getWT();
     if (!client){ reject(new Error('WebTorrent no disponible')); return; }
     if (streamServer){ try{streamServer.close();}catch{} streamServer=null; }
     if (activeTorrent){ try{client.remove(activeTorrent.infoHash);}catch{} activeTorrent=null; }
 
     let settled = false;
-    const done = (err, val)=>{ if(settled) return; settled=true; clearTimeout(to); err?reject(err):resolve(val); };
-    const to = setTimeout(()=>done(new Error('Timeout metadata')), 30000);
+    /* v5.5.2: si la promesa se settlea por error, asegurar que el torrent también muere
+       (antes quedaba huérfano consumiendo banda) */
+    const cleanup = () => {
+      try { if (activeTorrent) client.remove(activeTorrent.infoHash); } catch{}
+      activeTorrent = null;
+      try { if (streamServer) streamServer.close(); } catch{}
+      streamServer = null;
+    };
+    const done = (err, val)=>{
+      if(settled) return; settled=true;
+      clearTimeout(to); clearInterval(metaPoll);
+      if (err) cleanup();
+      err?reject(err):resolve(val);
+    };
+    /* v5.5.0: timeout subido a 120s (era 30s) — torrents grandes (11-20GB) con pocos peers
+       iniciales tardan más en descubrirse y traer metadata. */
+    const to = setTimeout(()=>done(new Error('Timeout metadata · 120s sin encontrar peers')), 120000);
     client.once('error', e=>done(e));
 
-    client.add(magnet, {
+    /* v5.5.0: poll periódico para reportar progreso de metadata.
+       Sin esto el usuario veía "Obteniendo metadata…" sin saber si está vivo. */
+    const metaPoll = setInterval(()=>{
+      const t = client.torrents[client.torrents.length-1];
+      if (!t || settled) return;
+      console.log(`[stream-torrent] esperando metadata · peers=${t.numPeers} · downloaded=${(t.downloaded/1e6).toFixed(1)}MB`);
+    }, 3000);
+
+    client.add(finalMagnet, {
       path: path.join(os.tmpdir(),'novacine'),
-      announce: NATIVE_TRACKERS,
+      announce: NATIVE_TRACKERS,  /* v5.4.5: añadir trackers extra a cada torrent */
       maxWebConns: 8,
     }, torrent=>{
       activeTorrent = torrent;
@@ -324,17 +479,29 @@ ipcMain.handle('stream-torrent', (_e, magnet)=>{
       const srv = http.createServer((req,res)=>{
         const total = vFile.length;
         const range = req.headers.range;
-        /* v5.4.2: helper para pipe seguro — destroy on client abort + swallow errors */
+        /* v5.4.2: helper para pipe seguro — destroy on client abort + swallow errors.
+           v5.5.2: + log de aborts y manejo de Range mal formado / out-of-range (HTTP 416). */
         const safePipe = (rs) => {
-          rs.on('error', () => { try{rs.destroy();}catch{} });
+          rs.on('error', (err) => { console.warn('[stream] readstream err:', err.message); try{rs.destroy();}catch{} });
           res.on('close', () => { try{rs.destroy();}catch{} });
           res.on('error', () => { try{rs.destroy();}catch{} });
-          try { rs.pipe(res); } catch{}
+          try { rs.pipe(res); } catch(e){ console.warn('[stream] pipe err:', e.message); }
         };
         if (range){
-          const [s,e] = range.replace(/bytes=/,'').split('-');
-          const start = parseInt(s,10);
-          const end = e ? parseInt(e,10) : Math.min(start+5*1024*1024, total-1);
+          /* v5.5.2: parser de Range robusto — antes "bytes=abc-def" devolvía NaN
+             y el video element se quedaba colgado sin error visible. */
+          const m = /bytes=(\d*)-(\d*)/.exec(range);
+          let start = m && m[1] !== '' ? parseInt(m[1],10) : 0;
+          let end   = m && m[2] !== '' ? parseInt(m[2],10) : Math.min(start + 5*1024*1024, total - 1);
+          if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= total){
+            try {
+              res.writeHead(416, { 'Content-Range': `bytes */${total}`, 'Content-Type':'text/plain' });
+              res.end('Range Not Satisfiable');
+            } catch{}
+            return;
+          }
+          if (end >= total) end = total - 1;
+          if (end < start) end = start;
           try {
             res.writeHead(206, {
               'Content-Range':`bytes ${start}-${end}/${total}`,
@@ -342,18 +509,26 @@ ipcMain.handle('stream-torrent', (_e, magnet)=>{
               'Content-Length': end-start+1,
               'Content-Type': contentType,
               'Access-Control-Allow-Origin':'*',
+              'Cache-Control':'no-store',
             });
             safePipe(vFile.createReadStream({ start, end }));
-          } catch{}
+          } catch(e){ console.warn('[stream] 206 err:', e.message); }
         } else {
           try {
             res.writeHead(200, {
               'Content-Length':total,'Content-Type': contentType,'Accept-Ranges':'bytes',
-              'Access-Control-Allow-Origin':'*',
+              'Access-Control-Allow-Origin':'*','Cache-Control':'no-store',
             });
             safePipe(vFile.createReadStream());
-          } catch{}
+          } catch(e){ console.warn('[stream] 200 err:', e.message); }
         }
+      });
+      /* v5.5.2: limit max conexiones simultáneas (browser puede abrir varias para Range).
+         Y manejar errores del server sin crashear. */
+      srv.maxConnections = 6;
+      srv.on('clientError', (err, socket) => {
+        console.warn('[stream] clientError:', err.message);
+        try { socket.destroy(); } catch{}
       });
       srv.listen(0,'127.0.0.1', ()=>{
         streamServer = srv;
